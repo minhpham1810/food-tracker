@@ -1,0 +1,60 @@
+{
+  "normal": {
+    "samples": 45,
+    "temperature_start": 4.0,
+    "temperature_end": 4.4,
+    "humidity_start": 60.0,
+    "humidity_end": 62.0,
+    "gas_start": 200000.0,
+    "gas_end": 198000.0
+  },
+  "hot_car": {
+    "samples": 45,
+    "temperature_start": 4.0,
+    "temperature_end": 22.0,
+    "humidity_start": 60.0,
+    "humidity_end": 52.0,
+    "gas_start": 200000.0,
+    "gas_end": 194000.0
+  },
+  "door_open": {
+    "samples": 45,
+    "temperature_start": 4.0,
+    "temperature_end": 14.0,
+    "humidity_start": 60.0,
+    "humidity_end": 50.0,
+    "gas_start": 200000.0,
+    "gas_end": 185000.0,
+    "door_open_after": 8
+  },
+  "spoilage": {
+    "samples": 60,
+    "temperature_start": 4.0,
+    "temperature_end": 4.4,
+    "humidity_start": 61.0,
+    "humidity_end": 63.0,
+    "gas_start": 200000.0,
+    "gas_end": 85000.0,
+    "clean_prefix": 20
+  },
+  "contradiction": {
+    "samples": 60,
+    "temperature_start": 4.0,
+    "temperature_end": 4.2,
+    "humidity_start": 60.0,
+    "humidity_end": 62.0,
+    "gas_start": 200000.0,
+    "gas_end": 60000.0,
+    "clean_prefix": 20
+  },
+  "past_budget_quiet": {
+    "samples": 36,
+    "temperature_start": 4.0,
+    "temperature_end": 4.1,
+    "humidity_start": 60.0,
+    "humidity_end": 61.0,
+    "gas_start": 200000.0,
+    "gas_end": 198000.0,
+    "timestamp_step_seconds": 43200
+  }
+}
