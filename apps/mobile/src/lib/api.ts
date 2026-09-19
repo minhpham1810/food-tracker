@@ -1,4 +1,4 @@
-import { File, UploadType } from 'expo-file-system';
+import { File } from 'expo-file-system';
 
 import type { AppState, AssistantReply, FoodProfile, ItemState, OCRResult } from './types';
 
@@ -12,6 +12,7 @@ const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8010/
  * and no item created. Abort instead, so callers get a failure they can show.
  */
 const REQUEST_TIMEOUT_MS = 12000;
+const OCR_REQUEST_TIMEOUT_MS = 130000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
@@ -106,21 +107,37 @@ export function setCategory(itemId: string, profileId: string): Promise<ItemStat
   return requestJson(`/items/${itemId}/category`, { profile_id: profileId });
 }
 
-export async function ocrScan(photoUri: string): Promise<OCRResult> {
-  // expo-file-system's File.upload() drives a native multipart upload task instead of
-  // routing the local file through fetch()'s FormData/{uri} shim, which is unreliable
-  // for large local file:// URIs on-device (see apps/mobile/AGENTS.md: API surface here
-  // has changed across SDKs -- this is the current SDK's documented upload path).
-  const file = new File(photoUri);
-  const result = await file.upload(`${API_BASE}/ocr/scan`, {
-    uploadType: UploadType.MULTIPART,
-    fieldName: 'image',
-    mimeType: 'image/jpeg',
+export async function ocrScan(photoUris: string[]): Promise<OCRResult> {
+  if (photoUris.length === 0) throw new Error('Add at least one photo before scanning.');
+
+  // Expo SDK 57 File implements Blob, so several native file:// or content:// assets
+  // can share one multipart request without loading their bytes into JavaScript.
+  const form = new FormData();
+  photoUris.forEach((uri, index) => {
+    const file = new File(uri);
+    form.append('images', file, file.name || `label-${index + 1}.jpg`);
   });
-  if (result.status < 200 || result.status >= 300) {
-    throw new Error(result.body || `Scan failed (${result.status})`);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OCR_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE}/ocr/scan`, {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error((await response.text()) || `Scan failed (${response.status})`);
+    }
+    return (await response.json()) as OCRResult;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Qwen did not finish the scan within 130 seconds.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return JSON.parse(result.body) as OCRResult;
 }
 
 /**

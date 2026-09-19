@@ -230,6 +230,58 @@ def test_qwen_vision_extracts_structured_label_fields(monkeypatch):
     assert captured["payload"]["think"] is False
 
 
+def test_qwen_vision_reads_multiple_photos_in_one_request(monkeypatch):
+    monkeypatch.setenv("OCR_ENGINE", "qwen")
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured["payload"] = kwargs["json"]
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "product_name": "Whole Milk",
+                            "brand": "Fresh Valley",
+                            "printed_date": "SEP 12",
+                            "package_size": None,
+                            "lot_code": None,
+                            "raw_text": "FRESH VALLEY\nWHOLE MILK\nBEST BY SEP 12",
+                        }
+                    )
+                }
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    photo = render_label(["placeholder"])
+    response = client.post(
+        "/api/ocr/scan",
+        files=[
+            ("images", ("front.png", photo, "image/png")),
+            ("images", ("date.png", photo, "image/png")),
+        ],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["printed_date"] == "SEP 12"
+    assert len(captured["payload"]["messages"][0]["images"]) == 2
+
+
+def test_ocr_scan_requires_at_least_one_and_limits_photo_count():
+    assert client.post("/api/ocr/scan").status_code == 400
+
+    photo = render_label(["placeholder"])
+    response = client.post(
+        "/api/ocr/scan",
+        files=[("images", (f"label-{index}.png", photo, "image/png")) for index in range(6)],
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "A scan supports at most 5 images"
+
+
 def test_qwen_vision_drops_fields_not_grounded_in_transcription(monkeypatch):
     monkeypatch.setenv("OCR_ENGINE", "qwen")
 
@@ -265,31 +317,13 @@ def test_qwen_vision_drops_fields_not_grounded_in_transcription(monkeypatch):
     assert response.json()["confidence"] == 0.5
 
 
-def test_qwen_vision_falls_back_to_tesseract_when_ollama_is_unavailable(monkeypatch):
-    from apps.api import ocr as ocr_module
-
+def test_qwen_vision_reports_when_ollama_is_unavailable(monkeypatch):
     monkeypatch.setenv("OCR_ENGINE", "qwen")
-    fallback_called = False
 
     def unavailable(url, **kwargs):
         raise httpx.ConnectError("connection refused", request=httpx.Request("POST", url))
 
-    def fallback(image):
-        nonlocal fallback_called
-        fallback_called = True
-        return {
-            "product_name": "Whole Milk",
-            "brand": "Meadow Gold",
-            "printed_date": "SEP 05",
-            "package_size": None,
-            "lot_code": None,
-            "raw_text": "Whole Milk\nMeadow Gold\nBEST BY SEP 05",
-            "confidence": 0.8,
-            "suggested_profile_id": "milk",
-        }
-
     monkeypatch.setattr(httpx, "post", unavailable)
-    monkeypatch.setattr(ocr_module, "_scan_with_tesseract", fallback)
     response = client.post(
         "/api/ocr/scan",
         files={
@@ -301,15 +335,11 @@ def test_qwen_vision_falls_back_to_tesseract_when_ollama_is_unavailable(monkeypa
         },
     )
 
-    assert response.status_code == 200
-    assert fallback_called is True
-    assert "Milk" in response.json()["product_name"]
-    assert response.json()["suggested_profile_id"] == "milk"
+    assert response.status_code == 503
+    assert "connection refused" in response.json()["detail"]
 
 
-def test_qwen_failure_reports_unavailable_tesseract_cleanly(monkeypatch):
-    import pytesseract
-
+def test_qwen_invalid_response_does_not_fall_back_to_tesseract(monkeypatch):
     from apps.api import ocr as ocr_module
     from apps.api.vision_ocr import VisionOCRError
 
@@ -318,18 +348,11 @@ def test_qwen_failure_reports_unavailable_tesseract_cleanly(monkeypatch):
     def invalid_qwen_response(image):
         raise VisionOCRError("invalid response")
 
-    def missing_tesseract(image):
-        raise pytesseract.TesseractNotFoundError()
-
     monkeypatch.setattr(ocr_module, "extract_label", invalid_qwen_response)
-    monkeypatch.setattr(ocr_module, "_scan_with_tesseract", missing_tesseract)
     response = client.post(
         "/api/ocr/scan",
         files={"image": ("label.png", render_label(["placeholder"]), "image/png")},
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"] == (
-        "Qwen vision OCR failed (invalid response); "
-        "the Tesseract fallback is not installed"
-    )
+    assert response.json()["detail"] == "invalid response"

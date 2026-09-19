@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Sequence
 from dataclasses import dataclass
 import io
 import json
@@ -39,13 +40,14 @@ LABEL_SCHEMA = {
     "additionalProperties": False,
 }
 
-_PROMPT = """Read this food package label and return only the requested JSON object.
+_PROMPT = """Read these photos of the same food package and return only the requested JSON object.
 
-Transcribe all visible label text exactly into raw_text, preserving line breaks where practical.
+Use every photo as another view of the same item. Transcribe all visible label text exactly into
+raw_text, combining non-duplicate text across the photos and preserving line breaks where practical.
 Extract product_name, brand, printed_date, package_size, and lot_code only when each value is
-visibly printed in the image. Do not infer, repair, autocomplete, or invent missing text. Use null
-for every field that is absent, obscured, blurry, or uncertain. Keep date and size text in the
-form printed on the package.
+visibly printed in at least one photo. Do not infer, repair, autocomplete, or invent missing
+text. Use null for every field that is absent, obscured, blurry, or uncertain. Keep date and
+size text in the form printed on the package.
 """
 
 
@@ -64,8 +66,10 @@ class VisionLabel:
     confidence: float
 
 
-def extract_label(image: Image.Image) -> VisionLabel:
-    """Extract grounded label fields from an image with Qwen vision."""
+def extract_label(images: Sequence[Image.Image]) -> VisionLabel:
+    """Extract grounded label fields from several views with Qwen vision."""
+    if not images:
+        raise ValueError("At least one image is required")
     response = httpx.post(
         _chat_url(),
         timeout=_timeout_seconds(),
@@ -84,7 +88,7 @@ def extract_label(image: Image.Image) -> VisionLabel:
                 {
                     "role": "user",
                     "content": _PROMPT,
-                    "images": [_encode_image(image)],
+                    "images": [_encode_image(image) for image in images],
                 }
             ],
         },

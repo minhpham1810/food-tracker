@@ -29,17 +29,15 @@ The API documentation is at <http://localhost:8010/docs>. Inventory and telemetr
 are held in memory and reset when the server restarts.
 
 Label scanning uses the local `qwen3.5:9b` model as a structured vision extractor.
-It transcribes the label, returns only fields grounded in that transcription, and
-leaves every field editable before an item is created. PNG/JPEG and HEIC photos are
-supported. Configure the model with the `OCR_*` values in the root `.env`; set
-`OCR_ENGINE=tesseract` to bypass Qwen.
+A scan can combine up to five photos of the same package, so the front label, date
+stamp, size, and lot code can be captured from different views. Qwen transcribes the
+photos together, returns only fields grounded in that transcription, and leaves every
+field editable before an item is created. PNG/JPEG and HEIC photos are supported.
+Configure the model with the `OCR_*` values in the root `.env`.
 
-Tesseract remains the automatic offline fallback when Ollama is unreachable or
-returns an invalid structured response. Using that fallback and running its real OCR
-tests require the **Tesseract executable** on PATH. On macOS, install it with
-`brew install tesseract`; on Debian/Ubuntu, use `sudo apt install tesseract-ocr`.
-Installing the Python dependencies alone does not install Tesseract. Check with
-`tesseract --version`.
+Qwen failures are returned to the app instead of silently switching OCR engines.
+`OCR_ENGINE=tesseract` remains an explicit legacy single-photo mode for development
+and deterministic OCR tests; it requires the **Tesseract executable** on PATH.
 
 The assistant needs a separately running OpenAI-compatible model server. The
 default configuration uses [Ollama](https://ollama.com) on port **11434** with

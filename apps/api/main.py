@@ -142,15 +142,25 @@ def set_category(item_id: str, payload: CategoryIn):
 
 
 @app.post("/api/ocr/scan", response_model=OCRResultOut)
-async def ocr_scan(image: UploadFile = File(...)):
-    content = await image.read()
+async def ocr_scan(
+    images: list[UploadFile] | None = File(default=None),
+    image: UploadFile | None = File(default=None),
+):
+    # `image` keeps older app builds compatible; new clients repeat `images` for
+    # each view. Limiting the set keeps request size and local vision inference bounded.
+    uploads = images or ([image] if image is not None else [])
+    if not uploads:
+        raise HTTPException(status_code=400, detail="At least one image is required")
+    if len(uploads) > 5:
+        raise HTTPException(status_code=400, detail="A scan supports at most 5 images")
+    contents = [await upload.read() for upload in uploads]
     try:
         # Vision inference can take tens of seconds during a cold model load. Keep
         # the event loop free so health, inventory, and telemetry requests continue.
-        return await run_in_threadpool(ocr_module.scan_image, content)
+        return await run_in_threadpool(ocr_module.scan_images, contents)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ocr_module.VisionOCRError as exc:
+    except (httpx.HTTPError, ocr_module.VisionOCRError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

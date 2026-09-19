@@ -13,6 +13,7 @@ import type { FoodProfile, OCRResult } from '@/lib/types';
 
 /** Below this, the extracted fields need an explicit warning. */
 const LOW_CONFIDENCE = 0.6;
+const MAX_PHOTOS = 5;
 
 /** The editable form behind the OCR result. Every field is user-correctable. */
 interface Draft {
@@ -30,7 +31,7 @@ function emptyToNull(value: string): string | null {
 
 export default function ScanScreen() {
   const router = useRouter();
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<OCRResult | null>(null);
@@ -48,17 +49,26 @@ export default function ScanScreen() {
   }, []);
 
   const reset = () => {
-    setPhotoUri(null);
+    setPhotoUris([]);
     setResult(null);
     setDraft(null);
     setProfileId(null);
     setShowRawText(false);
   };
 
-  const pickAndScan = async (source: 'camera' | 'library') => {
-    setError(null);
+  const clearScanResult = () => {
     setResult(null);
     setDraft(null);
+    setProfileId(null);
+    setShowRawText(false);
+  };
+
+  const pickPhotos = async (source: 'camera' | 'library') => {
+    setError(null);
+    if (photoUris.length >= MAX_PHOTOS) {
+      setError(`A scan supports up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     const permission =
       source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -72,14 +82,30 @@ export default function ScanScreen() {
     const picked =
       source === 'camera'
         ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+        : await ImagePicker.launchImageLibraryAsync({
+            quality: 0.7,
+            allowsMultipleSelection: true,
+            selectionLimit: MAX_PHOTOS - photoUris.length,
+          });
     if (picked.canceled || picked.assets.length === 0) return;
 
-    const uri = picked.assets[0].uri;
-    setPhotoUri(uri);
+    const additions = picked.assets.map((asset) => asset.uri);
+    setPhotoUris((current) => [...new Set([...current, ...additions])].slice(0, MAX_PHOTOS));
+    clearScanResult();
+  };
+
+  const removePhoto = (uri: string) => {
+    setPhotoUris((current) => current.filter((photo) => photo !== uri));
+    clearScanResult();
+  };
+
+  const scanPhotos = async () => {
+    if (photoUris.length === 0) return;
+    setError(null);
     setScanning(true);
+    clearScanResult();
     try {
-      const scanned = await ocrScan(uri);
+      const scanned = await ocrScan(photoUris);
       setResult(scanned);
       setDraft({
         name: scanned.product_name,
@@ -137,25 +163,63 @@ export default function ScanScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>CAMERA + OCR</Text>
       <Text style={styles.hint}>
-        Photograph or pick a label. Local Qwen vision reads it on the backend, with Tesseract as
-        an offline fallback. Check every field before adding because label reads are rarely perfect.
+        Add up to {MAX_PHOTOS} views of the same package, such as the front, date stamp, and size.
+        Local Qwen vision reads them together. Check every field before adding because label reads
+        are rarely perfect.
       </Text>
 
       <View style={styles.buttonRow}>
         <Button
-          title="Take photo"
-          onPress={() => void pickAndScan('camera')}
+          title={photoUris.length > 0 ? 'Add photo' : 'Take photo'}
+          onPress={() => void pickPhotos('camera')}
+          disabled={scanning || photoUris.length >= MAX_PHOTOS}
           style={styles.flexButton}
         />
         <Button
-          title="Choose photo"
+          title="Choose photos"
           variant="secondary"
-          onPress={() => void pickAndScan('library')}
+          onPress={() => void pickPhotos('library')}
+          disabled={scanning || photoUris.length >= MAX_PHOTOS}
           style={styles.flexButton}
         />
       </View>
 
-      {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
+      {photoUris.length > 0 && (
+        <>
+          <Text style={styles.photoCount}>
+            {photoUris.length} {photoUris.length === 1 ? 'photo' : 'photos'} added
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.previewRow}>
+            {photoUris.map((uri, index) => (
+              <View key={uri} style={styles.previewTile}>
+                <Image source={{ uri }} style={styles.preview} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove photo ${index + 1}`}
+                  disabled={scanning}
+                  onPress={() => removePhoto(uri)}
+                  style={styles.removePhoto}>
+                  <Text style={styles.removePhotoText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          {!result && (
+            <Button
+              title={
+                scanning
+                  ? 'Reading photos…'
+                  : `Scan ${photoUris.length === 1 ? 'photo' : 'photos'} with Qwen`
+              }
+              disabled={scanning}
+              onPress={() => void scanPhotos()}
+            />
+          )}
+        </>
+      )}
 
       {scanning && (
         <View style={styles.row}>
@@ -175,7 +239,8 @@ export default function ScanScreen() {
             the usual culprit — past a certain point the characters simply aren&apos;t in the
             image.
           </Text>
-          <Button title="Take another photo" onPress={() => void pickAndScan('camera')} />
+          <Button title="Add another photo" onPress={() => void pickPhotos('camera')} />
+          <Button title="Scan again" variant="secondary" onPress={() => void scanPhotos()} />
           <Button title="Discard" variant="secondary" onPress={reset} />
         </Card>
       )}
@@ -278,7 +343,17 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   flexButton: { flex: 1 },
-  preview: { width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: colors.surface },
+  photoCount: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  previewRow: { gap: spacing.sm },
+  previewTile: { width: 180, gap: spacing.xs },
+  preview: {
+    width: 180,
+    height: 150,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  removePhoto: { alignSelf: 'center', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  removePhotoText: { color: colors.danger, fontSize: fontSize.xs, fontWeight: '600' },
   sectionTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: spacing.sm },
   disclosure: { paddingVertical: spacing.xs },

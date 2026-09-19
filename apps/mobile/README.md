@@ -9,7 +9,8 @@ before changing SDK integrations.
 
 - Fridge: periodically refreshed inventory, telemetry, alerts, and manual add.
 - Item details: rename, change category, mark opened, set color-label score, remove.
-- Scan: camera/library image, OCR, editable fields and category, confirm inventory entry.
+- Scan: up to five camera/library images of one package, Qwen vision extraction,
+  editable fields and category, confirm inventory entry.
 - Assistant: messages and tool-call results from the optional model server.
 
 Profiles come from the backend. An unavailable gas baseline is displayed as
@@ -23,10 +24,11 @@ npx tsc --noEmit
 npx expo export --platform all
 ```
 
-On a phone, check manual add, item edits, mark opened, deletion, camera/library
-permission denial, scan correction and confirmation, an unreachable backend, and
-assistant success/unavailability. Check empty inventory and telemetry without a
-gas baseline. Start a scenario using the root guide and check dashboard refresh.
+On a phone, check manual add, item edits, mark opened, deletion, repeated camera capture,
+multi-select from the library, photo removal, permission denial, scan correction and
+confirmation, an unreachable backend, and assistant success/unavailability. Check empty
+inventory and telemetry without a gas baseline. Start a scenario using the root guide and
+check dashboard refresh.
 
 ## Current limitations
 
@@ -34,12 +36,12 @@ There is no automated mobile interaction suite. Successful export is a build
 check, not a device test. Native camera/upload behavior requires an actual device
 or suitable simulator and a compatible Expo runtime.
 
-Web preview is useful for layout and inventory browsing. The imported native
-`expo-file-system` upload path does not support web OCR, and the React Native
+Web preview is useful for layout and inventory browsing. Native camera/library behavior
+still requires a device or simulator, and the React Native
 confirmation alert used for deletion does not implement web deletion. These
 flows target iOS/Android in this MVP.
 
-JSON API requests time out after 12 seconds; slow local-model inference can exceed
-that deadline. Photo upload uses a separate native upload task. The current app
+JSON API requests time out after 12 seconds. Multi-photo Qwen scans have a separate
+130-second deadline. The current app
 has no authentication or durable local inventory; the backend owns inventory and
 loses it on restart.
