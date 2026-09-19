@@ -8,7 +8,8 @@ class TelemetryIn(BaseModel):
     temperature: float
     humidity: float = Field(ge=0, le=100)
     gas_resistance: float = Field(gt=0)
-    door_open: bool
+    # Optional: the live BME688 sensor has no door switch.
+    door_open: bool = False
 
 
 class ItemCreate(BaseModel):
@@ -85,8 +86,6 @@ class TelemetryOut(BaseModel):
     humidity: float | None
     gas_resistance: float | None
     gas_anomaly: float | None
-    door_open: bool | None
-    burn_multiplier: float | None
 
 
 class ItemOut(BaseModel):

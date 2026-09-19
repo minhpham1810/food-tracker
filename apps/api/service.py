@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import numpy as np
 
-from engine.burn import days_left, freshness_fraction, rate_multiplier, update_budget
+from engine.burn import days_left, freshness_fraction, update_budget
 from engine.conditioning import condition_samples, gas_baseline_samples
 from engine.fusion import fuse
 from engine.gas import fit_gas_baseline, gas_anomaly
@@ -44,8 +44,6 @@ class TelemetryState:
     humidity: float | None
     gas_resistance: float | None
     gas_anomaly: float | None
-    door_open: bool | None
-    burn_multiplier: float | None
 
 
 @dataclass(frozen=True)
@@ -123,11 +121,6 @@ class FreshnessService:
             profile = self.profiles[item.profile_id]
             item.t_eff = update_budget(item.t_eff, sample.temperature, dt_hours, profile.q10)
 
-        # Demo-milk excursion cost: excess reference-budget burn above a 4 C baseline.
-        if dt_hours > 0:
-            multiplier = rate_multiplier(sample.temperature, self.profiles["milk"].q10)
-            self.store.excursion_loss_hours += dt_hours * max(0.0, multiplier - 1.0)
-
         self.store.append_telemetry(sample)
         self.store.telemetry_paused = False
         if self.store.gas_baseline is None:
@@ -187,10 +180,6 @@ class FreshnessService:
             humidity=latest.humidity if latest else None,
             gas_resistance=latest.gas_resistance if latest else None,
             gas_anomaly=gas_score,
-            door_open=latest.door_open if latest else None,
-            burn_multiplier=(
-                rate_multiplier(latest.temperature, 2.5) if latest is not None else None
-            ),
         )
         items = sorted(
             (self._item_state(item, gas_score) for item in self.store.items.values()),
@@ -212,7 +201,6 @@ class FreshnessService:
         self.store.alerts.clear()
         self.store.active_scenario = None
         self.store.telemetry_paused = False
-        self.store.excursion_loss_hours = 0.0
         for item in self.store.items.values():
             profile = self.profiles[item.profile_id]
             item.active_d0_days = profile.d0_days
@@ -281,24 +269,14 @@ class FreshnessService:
     def _refresh_alerts(self) -> None:
         alerts: list[AlertRecord] = []
         latest = self.store.latest_telemetry
-        if latest is not None:
-            if latest.door_open:
-                alerts.append(AlertRecord("door_open", "Refrigerator door is open.", "warning"))
-            if latest.temperature > 8.0:
-                alerts.append(
-                    AlertRecord(
-                        "warm_fridge",
-                        "Temperature is elevated; freshness is burning faster.",
-                        "warning",
-                    )
+        if latest is not None and latest.temperature > 8.0:
+            alerts.append(
+                AlertRecord(
+                    "warm_fridge",
+                    "Temperature is elevated; freshness is burning faster.",
+                    "warning",
                 )
-                alerts.append(
-                    AlertRecord(
-                        "excursion_damage",
-                        f"Demo milk excursion cost: {self.store.excursion_loss_hours:.1f} hours of freshness budget.",
-                        "warning",
-                    )
-                )
+            )
         gas_score = self._latest_gas_anomaly()
         for item in self.store.items.values():
             state = self._item_state(item, gas_score)

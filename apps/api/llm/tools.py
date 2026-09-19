@@ -33,7 +33,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "get_fridge_status",
             "description": (
-                "Get the latest telemetry reading (temperature, humidity, gas, door state) "
+                "Get the latest telemetry reading (temperature, humidity, gas) "
                 "and any active alerts."
             ),
             "parameters": {"type": "object", "properties": {}},
@@ -117,7 +117,6 @@ class ToolDispatcher:
                 "temperature": state.telemetry.temperature,
                 "humidity": state.telemetry.humidity,
                 "gas_resistance": state.telemetry.gas_resistance,
-                "door_open": state.telemetry.door_open,
             },
             "alerts": [
                 {"code": alert.code, "message": alert.message, "severity": alert.severity}

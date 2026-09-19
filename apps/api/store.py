@@ -37,7 +37,6 @@ class AppStore:
     alerts: list[AlertRecord] = field(default_factory=list)
     active_scenario: str | None = None
     telemetry_paused: bool = False
-    excursion_loss_hours: float = 0.0
 
     def append_telemetry(self, sample: TelemetrySample) -> None:
         self.telemetry_history.append(sample)

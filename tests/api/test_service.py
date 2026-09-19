@@ -123,11 +123,11 @@ def test_add_item_stores_ocr_metadata():
     assert item.lot_code == "L2309A"
 
 
-def test_warm_excursion_reports_cumulative_demo_budget_cost():
+def test_warm_fridge_alert_has_no_demo_milk_cost():
     service = FreshnessService(seed_hero_items=False)
     service.add_item("milk")
     service.ingest(TelemetrySample(0, 4.0, 60.0, 200000.0, False))
     state = service.ingest(TelemetrySample(3600, 22.0, 60.0, 200000.0, False))
-    damage = next(alert for alert in state.alerts if alert.code == "excursion_damage")
-    assert "hours of freshness budget" in damage.message
-    assert service.store.excursion_loss_hours > 0
+    codes = {alert.code for alert in state.alerts}
+    assert "warm_fridge" in codes
+    assert "excursion_damage" not in codes

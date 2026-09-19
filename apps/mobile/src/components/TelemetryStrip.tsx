@@ -12,7 +12,7 @@ const WARM_FRIDGE_C = 8.0;
 interface Cell {
   label: string;
   value: string;
-  /** Amber when the reading is itself the problem (warm, door ajar). */
+  /** Amber when the reading is itself the problem (warm fridge, gas anomaly). */
   alarm?: boolean;
 }
 
@@ -32,17 +32,6 @@ function buildCells(t: TelemetryState): Cell[] {
       label: 'Gas anomaly',
       value: t.gas_anomaly == null ? UNAVAILABLE : `${Math.round(t.gas_anomaly * 100)}%`,
       alarm: t.gas_anomaly != null && t.gas_anomaly > 0.8,
-    },
-    {
-      label: 'Door',
-      value: t.door_open == null ? UNAVAILABLE : t.door_open ? 'Open' : 'Closed',
-      alarm: t.door_open === true,
-    },
-    {
-      // service.snapshot() computes this with milk's Q10 regardless of item.
-      label: 'Demo milk burn rate',
-      value: t.burn_multiplier == null ? UNAVAILABLE : `${t.burn_multiplier.toFixed(2)}×`,
-      alarm: t.burn_multiplier != null && t.burn_multiplier > 1.5,
     },
   ];
 }

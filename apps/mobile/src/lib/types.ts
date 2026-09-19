@@ -39,8 +39,6 @@ export interface TelemetryState {
   gas_resistance: number | null;
   /** null means "no baseline yet" -- never render this as evidence of freshness. */
   gas_anomaly: number | null;
-  door_open: boolean | null;
-  burn_multiplier: number | null;
 }
 
 export interface Alert {

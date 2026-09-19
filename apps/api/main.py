@@ -29,6 +29,7 @@ from .schemas import (
     TelemetryIn,
 )
 from .service import FreshnessService
+from .thingspeak import ThingSpeakConfig, ThingSpeakPoller
 from simulator.scenarios import available_scenarios
 from simulator.mendeley_replay import load_mendeley_csv
 from simulator.sensor_sim import SensorSimulator
@@ -41,7 +42,14 @@ llm_gateway = LLMGateway(tool_dispatcher)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Read at startup rather than import so tests can switch the live feed off.
+    config = ThingSpeakConfig.from_env()
+    poller = ThingSpeakPoller(config, service.ingest, service.store) if config else None
+    if poller is not None:
+        poller.start()
     yield
+    if poller is not None:
+        await poller.stop()
     await simulator.stop()
 
 
