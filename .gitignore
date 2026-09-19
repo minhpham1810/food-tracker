@@ -1,0 +1,17 @@
+.worktrees/
+.superpowers/sdd/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.env
+node_modules/
+dist/
+coverage/
+.coverage
+htmlcov/
+.DS_Store
+data/*.csv
+*.log

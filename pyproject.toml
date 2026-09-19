@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "freshness-tracker"
+version = "0.1.0"
+description = "Hardware-independent freshness tracking MVP"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "numpy>=2.0,<3",
+  "pillow>=11.0,<12",
+  "pillow-heif>=1.0,<2",
+  "pydantic>=2.11,<3",
+  "pytesseract>=0.3.13,<1",
+  "python-dotenv>=1.0,<2",
+  "python-multipart>=0.0.20,<1",
+  "scipy>=1.14,<2",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<10"]
+
+[tool.setuptools.packages.find]
+include = ["engine*", "apps*", "simulator*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
