@@ -60,8 +60,12 @@ class FreshnessService:
         self.store = store or AppStore()
         self.profiles = load_profiles()
         if seed_hero_items and not self.store.items:
-            for profile_id in ("milk", "chicken", "spinach"):
-                self.add_item(profile_id)
+            for profile_id, name in (
+                ("dairy", "Milk"),
+                ("poultry", "Raw chicken breast"),
+                ("leafy_greens", "Spinach"),
+            ):
+                self.add_item(profile_id, name)
 
     def add_item(
         self,

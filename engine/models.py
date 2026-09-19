@@ -10,6 +10,8 @@ class FoodProfile:
     q10: float
     placeholder: bool
     advice: str
+    # Label words (singular) that suggest this category during OCR.
+    keywords: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

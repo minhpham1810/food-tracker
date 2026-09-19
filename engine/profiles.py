@@ -21,7 +21,8 @@ def load_profiles() -> dict[str, FoodProfile]:
         missing = _REQUIRED_FIELDS - values.keys()
         if missing:
             raise ValueError(f"Profile {profile_id!r} missing fields: {sorted(missing)}")
-        profile = FoodProfile(id=profile_id, **values)
+        keywords = tuple(word.lower() for word in values.pop("keywords", ()))
+        profile = FoodProfile(id=profile_id, keywords=keywords, **values)
         if profile.d0_days <= 0 or profile.opened_d0_days <= 0 or profile.q10 <= 0:
             raise ValueError(f"Profile {profile_id!r} has invalid numeric values")
         profiles[profile_id] = profile

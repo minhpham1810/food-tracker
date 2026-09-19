@@ -32,7 +32,7 @@ def test_missing_or_invalid_telemetry_is_rejected():
 
 
 def test_item_add_open_and_label_score_routes():
-    created = client.post("/api/items", json={"profile_id": "milk", "name": "Demo milk"})
+    created = client.post("/api/items", json={"profile_id": "dairy", "name": "Demo milk"})
     assert created.status_code == 201
     item_id = created.json()["id"]
     assert client.post(f"/api/items/{item_id}/opened").status_code == 200
@@ -42,7 +42,7 @@ def test_item_add_open_and_label_score_routes():
 
 
 def test_get_rename_and_recategorize_item_routes():
-    created = client.post("/api/items", json={"profile_id": "milk", "name": "Demo milk"})
+    created = client.post("/api/items", json={"profile_id": "dairy", "name": "Demo milk"})
     item_id = created.json()["id"]
 
     fetched = client.get(f"/api/items/{item_id}")
@@ -53,9 +53,9 @@ def test_get_rename_and_recategorize_item_routes():
     assert renamed.status_code == 200
     assert renamed.json()["name"] == "Leftover milk"
 
-    recategorized = client.post(f"/api/items/{item_id}/category", json={"profile_id": "chicken"})
+    recategorized = client.post(f"/api/items/{item_id}/category", json={"profile_id": "poultry"})
     assert recategorized.status_code == 200
-    assert recategorized.json()["profile_id"] == "chicken"
+    assert recategorized.json()["profile_id"] == "poultry"
 
     assert client.get("/api/items/does-not-exist").status_code == 404
     assert client.post(f"/api/items/{item_id}/category", json={"profile_id": "made-up"}).status_code == 400
@@ -81,19 +81,19 @@ def test_profiles_endpoint_exposes_the_food_catalog():
     profiles = response.json()
 
     ids = {profile["id"] for profile in profiles}
-    assert {"milk", "chicken", "spinach"} <= ids
+    assert {"dairy", "poultry", "leafy_greens"} <= ids
 
-    milk = next(profile for profile in profiles if profile["id"] == "milk")
-    assert milk["name"] == "Milk"
-    assert milk["d0_days"] > milk["opened_d0_days"]
-    assert milk["q10"] > 0
+    dairy = next(profile for profile in profiles if profile["id"] == "dairy")
+    assert dairy["name"] == "Dairy"
+    assert dairy["d0_days"] > dairy["opened_d0_days"]
+    assert dairy["q10"] > 0
     # These coefficients are hackathon placeholders; the flag must survive to clients
     # so the UI can label them as such.
-    assert milk["placeholder"] is True
+    assert dairy["placeholder"] is True
 
 
 def test_delete_item_removes_it_and_clears_its_alerts():
-    created = client.post("/api/items", json={"profile_id": "milk", "name": "Doomed carton"})
+    created = client.post("/api/items", json={"profile_id": "dairy", "name": "Doomed carton"})
     item_id = created.json()["id"]
     assert any(item["id"] == item_id for item in client.get("/api/items").json())
 

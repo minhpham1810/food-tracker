@@ -4,12 +4,12 @@ from engine.models import TelemetrySample
 
 def test_service_starts_with_three_hero_foods():
     service = FreshnessService()
-    assert {item.profile_id for item in service.snapshot().items} == {"milk", "chicken", "spinach"}
+    assert {item.profile_id for item in service.snapshot().items} == {"dairy", "poultry", "leafy_greens"}
 
 
 def test_telemetry_updates_item_budget_using_elapsed_time():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     service.ingest(TelemetrySample(0, 4.0, 60.0, 200000.0, False))
     state = service.ingest(TelemetrySample(3600, 22.0, 60.0, 200000.0, False))
     updated = next(x for x in state.items if x.id == item.id)
@@ -19,7 +19,7 @@ def test_telemetry_updates_item_budget_using_elapsed_time():
 
 def test_opened_action_caps_remaining_budget_to_opened_profile_budget():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     opened = service.mark_opened(item.id)
     assert opened.opened is True
     assert opened.days_left <= 5.0
@@ -27,7 +27,7 @@ def test_opened_action_caps_remaining_budget_to_opened_profile_budget():
 
 def test_opening_never_increases_remaining_life():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("chicken")
+    item = service.add_item("poultry")
     service.ingest(TelemetrySample(0, 4.0, 60.0, 200000.0, False))
     before = service.ingest(TelemetrySample(36 * 3600, 4.0, 60.0, 200000.0, False)).items[0]
     after = service.mark_opened(item.id)
@@ -36,7 +36,7 @@ def test_opening_never_increases_remaining_life():
 
 def test_label_score_never_extends_track_a():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     service.ingest(TelemetrySample(0, 4.0, 60.0, 200000.0, False))
     track_a = service.snapshot().items[0].track_a_days_left
     scored = service.set_label_score(item.id, 0.5)
@@ -65,7 +65,7 @@ def test_contradiction_scenario_surfaces_secondary_disagreement():
     from simulator.scenarios import generate_scenario
 
     service = FreshnessService(seed_hero_items=False)
-    service.add_item("milk")
+    service.add_item("dairy")
     for sample in generate_scenario("contradiction", 0):
         service.ingest(sample)
     state = service.snapshot()
@@ -77,13 +77,13 @@ def test_contradiction_scenario_surfaces_secondary_disagreement():
 
 def test_items_store_added_timestamp():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     assert item.created_at > 0
 
 
 def test_rename_item_updates_display_name_only():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     renamed = service.rename_item(item.id, "Leftover milk")
     assert renamed.name == "Leftover milk"
     assert renamed.days_left == item.days_left
@@ -91,7 +91,7 @@ def test_rename_item_updates_display_name_only():
 
 def test_rename_item_rejects_blank_name():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     try:
         service.rename_item(item.id, "   ")
         assert False, "expected ValueError"
@@ -101,14 +101,14 @@ def test_rename_item_rejects_blank_name():
 
 def test_set_category_switches_profile_and_recomputes_budget():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
-    recategorized = service.set_category(item.id, "chicken")
-    assert recategorized.profile_id == "chicken"
+    item = service.add_item("dairy")
+    recategorized = service.set_category(item.id, "poultry")
+    assert recategorized.profile_id == "poultry"
 
 
 def test_set_category_rejects_unknown_profile():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     try:
         service.set_category(item.id, "made-up")
         assert False, "expected ValueError"
@@ -118,14 +118,14 @@ def test_set_category_rejects_unknown_profile():
 
 def test_add_item_stores_ocr_metadata():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk", "Scanned milk", brand="Meadow Gold", lot_code="L2309A")
+    item = service.add_item("dairy", "Scanned milk", brand="Meadow Gold", lot_code="L2309A")
     assert item.brand == "Meadow Gold"
     assert item.lot_code == "L2309A"
 
 
 def test_warm_fridge_alert_has_no_demo_milk_cost():
     service = FreshnessService(seed_hero_items=False)
-    service.add_item("milk")
+    service.add_item("dairy")
     service.ingest(TelemetrySample(0, 4.0, 60.0, 200000.0, False))
     state = service.ingest(TelemetrySample(3600, 22.0, 60.0, 200000.0, False))
     codes = {alert.code for alert in state.alerts}

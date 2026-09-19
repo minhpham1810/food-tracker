@@ -83,7 +83,7 @@ TOOL_SCHEMAS: list[dict] = [
                     "item_id": {"type": "string"},
                     "profile_id": {
                         "type": "string",
-                        "description": "A known food profile id, e.g. milk, chicken, spinach",
+                        "description": "A known food category id, e.g. dairy, poultry, red_meat, vegetables",
                     },
                 },
                 "required": ["item_id", "profile_id"],

@@ -262,8 +262,14 @@ def _pick_name_and_brand(lines: list[_Line]) -> tuple[str, str | None]:
 
 
 def _match_profile(raw_text: str) -> str | None:
+    """First category, in foods.json order, whose name or a keyword appears as a word.
+
+    Categories are generic ("Dairy"), so labels rarely name them; keywords map
+    "Whole Milk" to dairy. Order breaks ties, e.g. "chicken sausage" is poultry.
+    """
     lowered = raw_text.lower()
     for profile_id, profile in load_profiles().items():
-        if profile_id in lowered or profile.name.lower() in lowered:
-            return profile_id
+        for word in (profile.name.lower(), *profile.keywords):
+            if re.search(rf"\b{re.escape(word)}(?:e?s)?\b", lowered):
+                return profile_id
     return None

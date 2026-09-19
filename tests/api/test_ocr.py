@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw, ImageFont
 
 from apps.api.main import app
+from apps.api.ocr import _match_profile
 
 client = TestClient(app)
 
@@ -47,7 +48,7 @@ def test_ocr_scan_extracts_fields_from_a_rendered_label():
     assert response.status_code == 200
     body = response.json()
     assert "Milk" in body["product_name"]
-    assert body["suggested_profile_id"] == "milk"
+    assert body["suggested_profile_id"] == "dairy"
     assert body["package_size"] and "gal" in body["package_size"].lower()
     assert body["lot_code"] == "L2309A"
     assert 0.0 <= body["confidence"] <= 1.0
@@ -61,13 +62,13 @@ def test_ocr_scan_handles_heic_photos():
     assert response.status_code == 200
     body = response.json()
     assert "Milk" in body["product_name"]
-    assert body["suggested_profile_id"] == "milk"
+    assert body["suggested_profile_id"] == "dairy"
 
 
 def test_ocr_scan_matches_a_different_known_profile():
     png = render_label(["Chicken Breast", "Farmhouse", "USE BY SEP 04"])
     response = client.post("/api/ocr/scan", files={"image": ("label.png", png, "image/png")})
-    assert response.json()["suggested_profile_id"] == "chicken"
+    assert response.json()["suggested_profile_id"] == "poultry"
 
 
 def test_ocr_scan_rejects_unreadable_image_data():
@@ -93,7 +94,7 @@ def test_ocr_confirm_creates_item_with_scanned_metadata():
     )
     assert created.status_code == 201
     body = created.json()
-    assert body["profile_id"] == "spinach"
+    assert body["profile_id"] == "leafy_greens"
     assert body["brand"] == "GreenLeaf"
     assert body["lot_code"] == "S0042"
 
@@ -130,7 +131,7 @@ def test_product_name_beats_brand_when_the_label_uses_two_type_sizes():
     # The large line is the product; the small line above it is the brand.
     assert "MILK" in body["product_name"].upper()
     assert body["brand"] is not None and "VALLEY" in body["brand"].upper()
-    assert body["suggested_profile_id"] == "milk"
+    assert body["suggested_profile_id"] == "dairy"
 
 
 def test_metadata_lines_are_never_offered_as_the_product_or_brand():
@@ -162,7 +163,7 @@ def test_sideways_photo_is_rotated_before_reading():
     assert response.status_code == 200
     body = response.json()
     assert "Milk" in body["product_name"]
-    assert body["suggested_profile_id"] == "milk"
+    assert body["suggested_profile_id"] == "dairy"
     assert "SEP" in body["raw_text"].upper()
 
 
@@ -220,7 +221,7 @@ def test_qwen_vision_extracts_structured_label_fields(monkeypatch):
     assert body["printed_date"] == "SEP 12"
     assert body["package_size"] == "1 gal"
     assert body["lot_code"] == "A7734"
-    assert body["suggested_profile_id"] == "milk"
+    assert body["suggested_profile_id"] == "dairy"
     assert body["confidence"] == 1.0
     assert captured["url"] == "http://127.0.0.1:11434/api/chat"
     assert captured["payload"]["model"] == "qwen3.5:9b"
@@ -356,3 +357,22 @@ def test_qwen_invalid_response_does_not_fall_back_to_tesseract(monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "invalid response"
+
+
+@pytest.mark.parametrize(
+    ("label", "category"),
+    [
+        ("Ground Beef 80/20", "red_meat"),
+        ("Atlantic Salmon Fillet", "seafood"),
+        ("Large Brown Eggs", "eggs"),
+        ("Greek Yogurt", "dairy"),
+        ("Broccoli Crowns", "vegetables"),
+        ("Strawberries", "fruit"),
+        # Order in foods.json breaks ties: a chicken sausage is poultry.
+        ("Chicken Sausage", "poultry"),
+        # Keywords match whole words only.
+        ("Graham Crackers", None),
+    ],
+)
+def test_label_words_map_to_generic_categories(label, category):
+    assert _match_profile(label) == category

@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Link, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -37,17 +37,21 @@ export default function ScanScreen() {
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<OCRResult | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  // Deliberately starts null: an unrecognised label must NOT silently become milk.
+  // Deliberately starts null: an unrecognised label must NOT silently become dairy.
   const [profileId, setProfileId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
   const [showRawText, setShowRawText] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    getProfiles()
-      .then(setProfiles)
-      .catch(() => setProfiles([]));
-  }, []);
+  // Tabs stay mounted, so a one-time fetch would keep a stale category list
+  // (or an empty one after a failed request) until the app restarts.
+  useFocusEffect(
+    useCallback(() => {
+      getProfiles()
+        .then(setProfiles)
+        .catch(() => undefined);
+    }, []),
+  );
 
   const reset = () => {
     setPhotoUris([]);

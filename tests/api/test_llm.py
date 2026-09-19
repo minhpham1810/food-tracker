@@ -7,7 +7,7 @@ from apps.api.service import FreshnessService
 
 def make_dispatcher():
     service = FreshnessService(seed_hero_items=False)
-    item = service.add_item("milk")
+    item = service.add_item("dairy")
     return ToolDispatcher(service), item.id
 
 
@@ -72,8 +72,8 @@ def test_dispatcher_rename_and_recategorize():
     dispatcher, item_id = make_dispatcher()
     renamed = dispatcher.call("rename_item", {"item_id": item_id, "name": "Opened milk"})
     assert renamed["name"] == "Opened milk"
-    recategorized = dispatcher.call("set_food_category", {"item_id": item_id, "profile_id": "chicken"})
-    assert recategorized["profile_id"] == "chicken"
+    recategorized = dispatcher.call("set_food_category", {"item_id": item_id, "profile_id": "poultry"})
+    assert recategorized["profile_id"] == "poultry"
 
 
 def test_dispatcher_missing_item_id_argument_raises():
