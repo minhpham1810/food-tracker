@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -189,6 +189,14 @@ export default function ScanScreen() {
         />
       </View>
 
+      {photoUris.length === 0 && (
+        <Link href="/add-item" asChild>
+          <Pressable accessibilityRole="button" style={styles.disclosure}>
+            <Text style={styles.manualLink}>No label? Add it manually</Text>
+          </Pressable>
+        </Link>
+      )}
+
       {photoUris.length > 0 && (
         <>
           <Text style={styles.photoCount}>
@@ -357,6 +365,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: spacing.sm },
   disclosure: { paddingVertical: spacing.xs },
   disclosureText: { color: colors.accentText, fontSize: fontSize.xs, fontWeight: '600' },
+  manualLink: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '700' },
   rawText: {
     color: colors.codeText,
     fontSize: fontSize.xs,

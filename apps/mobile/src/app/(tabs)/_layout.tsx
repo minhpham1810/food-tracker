@@ -1,19 +1,9 @@
-import { Link, Tabs } from 'expo-router';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Tabs } from 'expo-router';
 
-import { AssistantIcon, FridgeIcon, ScanIcon } from '@/components/TabBarIcon';
-import { colors, fontSize, spacing } from '@/lib/theme';
-
-/** Header action on the Fridge tab -- opens the manual add-item screen. */
-function AddItemButton() {
-  return (
-    <Link href="/add-item" asChild>
-      <Pressable accessibilityRole="button" style={styles.headerButton}>
-        <Text style={styles.headerButtonText}>+ Add</Text>
-      </Pressable>
-    </Link>
-  );
-}
+import { AddTabButton } from '@/components/AddTabButton';
+import { NotificationsBell } from '@/components/NotificationsBell';
+import { AssistantIcon, FridgeIcon } from '@/components/TabBarIcon';
+import { colors } from '@/lib/theme';
 
 export default function TabsLayout() {
   return (
@@ -38,13 +28,23 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Fridge',
-          headerRight: () => <AddItemButton />,
+          // The Fridge screen replaces this with a live alert count once state loads.
+          headerRight: () => <NotificationsBell count={0} />,
           tabBarIcon: ({ color }) => <FridgeIcon color={color} />,
         }}
       />
       <Tabs.Screen
         name="scan"
-        options={{ title: 'Scan', tabBarIcon: ({ color }) => <ScanIcon color={color} /> }}
+        options={{
+          title: 'Add to fridge',
+          tabBarButton: ({ onPress, onLongPress, accessibilityState }) => (
+            <AddTabButton
+              onPress={onPress}
+              onLongPress={onLongPress}
+              accessibilityState={accessibilityState}
+            />
+          ),
+        }}
       />
       <Tabs.Screen
         name="assistant"
@@ -56,8 +56,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  headerButton: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
-  headerButtonText: { color: colors.accentText, fontSize: fontSize.md, fontWeight: '700' },
-});

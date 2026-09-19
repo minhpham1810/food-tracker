@@ -23,7 +23,8 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="items/[id]" options={{ title: 'Item detail' }} />
-        <Stack.Screen name="add-item" options={{ title: 'Add item' }} />
+        <Stack.Screen name="add-item" options={{ title: 'Add manually' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       </Stack>
     </SafeAreaProvider>
   );

@@ -146,7 +146,7 @@ export default function ItemDetailScreen() {
 
       {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* Hero: mirrors the fridge screen's Eat First card so the two read as one app. */}
+      {/* Hero: the item's status, number and confidence at a glance. */}
       <View
         style={[styles.hero, { backgroundColor: palette.wash, borderColor: palette.border }, shadows.hero]}>
         <View style={styles.heroHeader}>

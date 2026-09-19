@@ -2,41 +2,65 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FreshnessBar } from './FreshnessBar';
-import { colors, fontSize, radius, shadows, spacing, statusColors } from '@/lib/theme';
+import { colors, fontSize, radius, spacing, statusColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
 
 interface Props {
   item: ItemState;
+  /** The most urgent item: marked with a status-color wash, not a label. */
+  highlighted?: boolean;
+}
+
+/** Secondary line shared by the list row and the grid tile. */
+export function itemMeta(item: ItemState): string | null {
+  const parts = [item.brand, item.opened ? 'Opened' : null].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 /**
- * Compact row for everything below the hero. Deliberately quieter: name, number,
- * bar. Detail and actions live one tap away rather than repeating per row.
+ * List-view row for a fridge item, laid out like a Google Drive
+ * file row: leading badge, name + meta, trailing number. Detail and actions
+ * live one tap away rather than repeating per row.
  */
-export function ItemRow({ item }: Props) {
+export function ItemRow({ item, highlighted = false }: Props) {
   const palette = statusColors[item.status];
-
-  // Link asChild clones its single child, and expo-router rejects a style ARRAY
-  // on that child -- flatten it into one object first.
-  const rowStyle = StyleSheet.flatten([styles.row, shadows.card]);
+  const meta = itemMeta(item);
 
   return (
     <Link href={{ pathname: '/items/[id]', params: { id: item.id } }} asChild>
-      <Pressable accessibilityRole="button" style={rowStyle}>
-        <View style={styles.topRow}>
-          <View style={styles.nameGroup}>
-            <View style={[styles.statusDot, { backgroundColor: palette.bar }]} />
-            <Text style={styles.name} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </View>
-          <Text style={[styles.days, { color: palette.fg }]}>
-            {item.days_left.toFixed(1)}
-            <Text style={styles.daysUnit}> d</Text>
+      <Pressable
+        accessibilityRole="button"
+        style={
+          highlighted
+            ? StyleSheet.flatten([
+                styles.row,
+                styles.highlighted,
+                { backgroundColor: palette.wash, borderColor: palette.border },
+              ])
+            : styles.row
+        }>
+        <View style={[styles.badge, { backgroundColor: palette.wash, borderColor: palette.border }]}>
+          <Text style={[styles.badgeText, { color: palette.fg }]}>
+            {item.name.trim().charAt(0).toUpperCase() || '?'}
           </Text>
         </View>
-        <FreshnessBar daysLeft={item.days_left} status={item.status} />
-        {item.opened && <Text style={styles.meta}>Opened</Text>}
+
+        <View style={styles.body}>
+          <Text style={styles.name} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {meta !== null && (
+            <Text style={styles.meta} numberOfLines={1}>
+              {meta}
+            </Text>
+          )}
+          <FreshnessBar daysLeft={item.days_left} status={item.status} />
+        </View>
+
+        <Text style={[styles.days, { color: palette.fg }]}>
+          {item.days_left.toFixed(1)}
+          <Text style={styles.daysUnit}> d</Text>
+        </Text>
       </Pressable>
     </Link>
   );
@@ -44,20 +68,31 @@ export function ItemRow({ item }: Props) {
 
 const styles = StyleSheet.create({
   row: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    // A transparent frame on every row keeps content aligned with the
+    // highlighted row, whose frame is colored.
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderBottomColor: colors.border,
   },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nameGroup: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  statusDot: { width: 7, height: 7, borderRadius: radius.pill },
-  name: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', flexShrink: 1 },
+  // Link asChild rejects a style array, hence the flatten above.
+  highlighted: { borderRadius: radius.md, marginBottom: spacing.xs },
+  badge: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: fontSize.lg, fontWeight: '700' },
+  body: { flex: 1, gap: 2 },
+  name: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  meta: { color: colors.textDim, fontSize: fontSize.xs },
   days: { fontSize: fontSize.lg, fontWeight: '700' },
   daysUnit: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textDim },
-  meta: { color: colors.textDim, fontSize: fontSize.xs },
 });
