@@ -1,0 +1,26 @@
+{
+  "milk": {
+    "name": "Milk",
+    "d0_days": 10.0,
+    "opened_d0_days": 5.0,
+    "q10": 2.5,
+    "placeholder": true,
+    "advice": "Keep on a stable refrigerator shelf rather than the door."
+  },
+  "chicken": {
+    "name": "Raw chicken breast",
+    "d0_days": 2.0,
+    "opened_d0_days": 1.0,
+    "q10": 2.8,
+    "placeholder": true,
+    "advice": "Keep refrigerated on the bottom shelf to reduce cross-contamination risk."
+  },
+  "spinach": {
+    "name": "Spinach",
+    "d0_days": 5.0,
+    "opened_d0_days": 3.0,
+    "q10": 2.2,
+    "placeholder": true,
+    "advice": "Store in the high-humidity crisper drawer."
+  }
+}

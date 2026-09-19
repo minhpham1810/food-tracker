@@ -1,0 +1,35 @@
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class FoodProfile:
+    id: str
+    name: str
+    d0_days: float
+    opened_d0_days: float
+    q10: float
+    placeholder: bool
+    advice: str
+
+
+@dataclass(frozen=True)
+class TelemetrySample:
+    timestamp: float
+    temperature: float
+    humidity: float
+    gas_resistance: float
+    door_open: bool
+
+
+@dataclass(frozen=True)
+class GasBaseline:
+    beta: tuple[float, float, float, float]
+    residual_mean: float
+    residual_std: float
+
+
+@dataclass(frozen=True)
+class FusionResult:
+    days_left: float
+    confidence: str
+    status: str
