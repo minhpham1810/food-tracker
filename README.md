@@ -1,75 +1,150 @@
 # Freshness Tracker
 
-A food freshness tracker with a Python engine, FastAPI backend, telemetry
-simulator, and Expo mobile app.
+A food freshness prototype with a Python engine, FastAPI backend, telemetry
+simulator, and Expo mobile app. The app includes an inventory dashboard, telemetry
+and alerts, item details and editing, manual entry, label scanning with editable
+OCR results, and a local-model assistant.
 
-The freshness engine, telemetry simulator, inventory service, local-model assistant,
-and API with label scanning are implemented. The mobile app is still a scaffold.
+This is a waste-reduction prototype, not a food-safety device. Food-profile
+coefficients are placeholders. Only the temperature track originates remaining
+freshness; gas and color-label signals can only shorten it.
 
-## Repository layout
+## Backend setup
 
-```text
-apps/
-  api/          FastAPI backend package
-  mobile/       Expo mobile dependencies and TypeScript configuration
-engine/         Freshness calculation package
-simulator/      Telemetry simulation package
-tests/
-  api/          Backend tests
-  engine/       Freshness engine tests
-  simulator/    Telemetry simulation tests
-docs/           Project documentation
-```
-
-## Dependency setup
-
-Python 3.12 or newer is required. Create a virtual environment from the
-repository root and install the Python dependencies:
+Use Python 3.12 or newer. From the repository root:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
+cp .env.example .env
+python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8010 --env-file .env
 ```
 
-With Node.js and npm installed, install the mobile dependencies using the
-committed lockfile:
+On Windows, create the environment with `py -3.14 -m venv .venv` (or another
+installed Python 3.12+), activate it with `.\.venv\Scripts\Activate.ps1`, and use
+`Copy-Item .env.example .env` instead of `cp`.
+
+The API documentation is at <http://localhost:8010/docs>. Inventory and telemetry
+are held in memory and reset when the server restarts.
+
+Label scanning and the real OCR tests require the **Tesseract executable** on
+PATH. On macOS, install it with `brew install tesseract`; on Debian/Ubuntu, use
+`sudo apt install tesseract-ocr`. PNG/JPEG and HEIC photos are supported, including
+orientation correction. Installing the Python dependencies alone does not install
+Tesseract. Check with `tesseract --version`.
+
+The assistant needs a separately running model server supporting OpenAI-compatible
+tool calls. Configure `OMLX_BASE_URL`, `OMLX_MODEL`, and optionally `OMLX_API_KEY`
+in the root `.env`. The example points at a model server on port **8000**; the
+Freshness API uses **8010**. These variables also work with compatible servers
+other than oMLX. Model selection must match a model installed in that server.
+Other API features work without a model server. Use `--env-file .env` to load the
+file; the app does not automatically load it.
+
+## Mobile setup
+
+Use Node.js 22.13 or newer, as required by [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/).
+In another terminal:
 
 ```sh
 cd apps/mobile
 npm ci
+cp .env.example .env
+# Edit EXPO_PUBLIC_API_BASE_URL before starting Expo.
+npx expo start
 ```
 
-## Run the API
+For a physical phone, set `EXPO_PUBLIC_API_BASE_URL` to
+`http://YOUR_LAPTOP_LAN_IP:8010/api`. Find the laptop's address with
+`ipconfig getifaddr en0` on macOS or `ipconfig` on Windows. The phone and laptop
+must share a network that permits device-to-device traffic. `localhost` on a
+phone refers to the phone, not the laptop. Allow the backend through the laptop's
+firewall and restart Expo after changing the environment file.
 
-From the repository root, with the Python environment activated:
+Open the app using an Expo Go version compatible with SDK 57 or a development
+build. See the [mobile guide](apps/mobile/README.md) for verification and known
+platform limitations.
+
+## Demo and dataset replay
+
+The API starts with demo inventory. Start a synthetic scenario:
 
 ```sh
-python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8010
-python -m pytest -q
+curl -X POST http://127.0.0.1:8010/api/demo/scenarios/hot_car/start
+curl http://127.0.0.1:8010/api/state
 ```
 
-On Windows, create the environment with `py -3.14 -m venv .venv` (or another
-installed Python 3.12+), then activate it with `.\.venv\Scripts\Activate.ps1`.
+Available scenarios: `normal`, `hot_car`, `door_open`, `spoilage`, `contradiction`,
+and `past_budget_quiet`. The dashboard displays telemetry and item estimates;
+scenario controls are API-only.
 
-Interactive API documentation is available at `http://localhost:8010/docs`.
-The API supports inventory actions, telemetry ingestion, freshness state,
-demo scenarios, CSV replay, OCR scan/confirm, and assistant messages.
-Inventory and telemetry are held in memory and reset when the server restarts.
+```sh
+curl -X POST http://127.0.0.1:8010/api/demo/stop
+curl -X POST http://127.0.0.1:8010/api/demo/reset
+```
 
-Label scanning and the OCR integration tests require the Tesseract executable on
-PATH. PNG/JPEG and HEIC photos are supported, including orientation correction.
+Reset replaces inventory and telemetry with demo state. For CSV replay, put a
+compatible file under `FRESHNESS_DATA_DIR` (default `./data`), then run:
 
-The assistant requires a separately running model server supporting tool calls.
-Copy `.env.example` to `.env`, set `OMLX_BASE_URL`, `OMLX_MODEL`, and optionally
-`OMLX_API_KEY`, then add `--env-file .env` to the uvicorn command. These settings
-also work with compatible servers other than oMLX. Other API features work
-without a model server.
+```sh
+curl -X POST http://127.0.0.1:8010/api/demo/replay \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"beef.csv","sensor_column":"MQ135"}'
+```
 
-CSV replay paths are confined to `FRESHNESS_DATA_DIR` (default `./data`). Use
-`POST /api/demo/replay` with a JSON body such as
-`{"path": "beef.csv", "sensor_column": "MQ135"}`.
+The adapter requires `Minute`, `Temperature`, `Humidity`, and the selected `MQ*`
+column. Replay replaces demo state. Dataset files are not distributed here.
+Replay exercises the pipeline; it does not validate BME680 performance or train
+a model. Check dataset units before interpreting replayed gas values.
 
-This is a waste-reduction prototype, not a food-safety device. Food-profile
-coefficients are placeholders. Only the temperature track originates remaining
-freshness; gas and label signals can only shorten it.
+## Verification
+
+```sh
+# Repository root, with the Python environment activated
+python -m pytest -q
+
+# Mobile directory
+cd apps/mobile
+npx tsc --noEmit
+npx expo export --platform all
+```
+
+Python tests cover engine behavior, simulation/replay, inventory actions, API
+validation, real OCR, and mocked model-server responses. Export verifies bundling;
+physical camera permissions, uploads, and native navigation need device testing.
+
+## Project layout and architecture
+
+| Directory | Responsibility |
+| --- | --- |
+| `engine/` | Temperature-time calculations, gas baseline, signal fusion, food profiles |
+| `simulator/` | Synthetic scenarios and CSV replay |
+| `apps/api/` | HTTP routes, in-memory service, OCR, assistant tools |
+| `apps/mobile/` | Expo routes, shared components, API client |
+| `hardware code/` | CircuitPython sensor readout prototype and bundled libraries |
+| `tests/` | Python engine, simulator, and API tests |
+| `docs/` | Architecture, team handoff, and demo guide |
+
+```mermaid
+flowchart LR
+    SIM[Simulator / CSV replay] --> SERVICE[Freshness service]
+    HTTP[POST /api/telemetry] --> SERVICE
+    SERVICE <--> ENGINE[Temperature / gas / label fusion]
+    SERVICE <--> STORE[In-memory store]
+    APP[Expo app] --> API[FastAPI]
+    API --> SERVICE
+    API --> OCR[Tesseract OCR]
+    API --> LLM[Model gateway and validated tools]
+    LLM --> SERVICE
+```
+
+The simulator calls the same service ingestion method as the telemetry endpoint;
+it does not make HTTP requests. The hardware prototype currently prints sensor
+readings every two seconds. It does **not** upload telemetry or connect to the app.
+Hardware ingestion, persistence, shared-fridge gas semantics, and model calibration
+remain future work.
+
+See the [architecture guide](docs/architecture.md),
+[team handoff](docs/freshness-tracker-team-plan.md), and
+[digital demo guide](docs/digital-prototype-plan.md).
