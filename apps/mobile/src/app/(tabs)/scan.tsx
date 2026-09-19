@@ -1,0 +1,296 @@
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { Chip } from '@/components/Chip';
+import { LabeledInput } from '@/components/LabeledInput';
+import { getProfiles, ocrConfirm, ocrScan } from '@/lib/api';
+import { colors, eyebrow, fontSize, radius, spacing } from '@/lib/theme';
+import type { FoodProfile, OCRResult } from '@/lib/types';
+
+/** Below this, Tesseract's read is unreliable enough to warn about explicitly. */
+const LOW_CONFIDENCE = 0.6;
+
+/** The editable form behind the OCR result. Every field is user-correctable. */
+interface Draft {
+  name: string;
+  brand: string;
+  printedDate: string;
+  packageSize: string;
+  lotCode: string;
+}
+
+function emptyToNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export default function ScanScreen() {
+  const router = useRouter();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [result, setResult] = useState<OCRResult | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  // Deliberately starts null: an unrecognised label must NOT silently become milk.
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<FoodProfile[]>([]);
+  const [showRawText, setShowRawText] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getProfiles()
+      .then(setProfiles)
+      .catch(() => setProfiles([]));
+  }, []);
+
+  const reset = () => {
+    setPhotoUri(null);
+    setResult(null);
+    setDraft(null);
+    setProfileId(null);
+    setShowRawText(false);
+  };
+
+  const pickAndScan = async (source: 'camera' | 'library') => {
+    setError(null);
+    setResult(null);
+    setDraft(null);
+    const permission =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(
+        `Permission to use the ${source === 'camera' ? 'camera' : 'photo library'} was denied.`,
+      );
+      return;
+    }
+    const picked =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+    if (picked.canceled || picked.assets.length === 0) return;
+
+    const uri = picked.assets[0].uri;
+    setPhotoUri(uri);
+    setScanning(true);
+    try {
+      const scanned = await ocrScan(uri);
+      setResult(scanned);
+      setDraft({
+        name: scanned.product_name,
+        brand: scanned.brand ?? '',
+        printedDate: scanned.printed_date ?? '',
+        packageSize: scanned.package_size ?? '',
+        lotCode: scanned.lot_code ?? '',
+      });
+      setProfileId(scanned.suggested_profile_id);
+    } catch (err) {
+      setError(`OCR scan failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const confirm = async () => {
+    if (!draft || profileId === null) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      await ocrConfirm({
+        profile_id: profileId,
+        name: emptyToNull(draft.name),
+        brand: emptyToNull(draft.brand),
+        printed_date: emptyToNull(draft.printedDate),
+        package_size: emptyToNull(draft.packageSize),
+        lot_code: emptyToNull(draft.lotCode),
+      });
+      reset();
+      router.push('/');
+    } catch (err) {
+      setError(`Could not add this item: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  /**
+   * Which line is the product and which is the brand is genuinely ambiguous:
+   * some cartons set the product largest ("WHOLE MILK" over "Fresh Valley"),
+   * others set the brand largest ("ORGANIC VALLEY" over the product). No
+   * heuristic gets both right, so make correcting it one tap.
+   */
+  const swapNameAndBrand = () => {
+    if (!draft) return;
+    setDraft({ ...draft, name: draft.brand, brand: draft.name });
+  };
+
+  const unreadable = result !== null && result.raw_text.trim().length === 0;
+  const nameIsEmpty = draft !== null && draft.name.trim().length === 0;
+  const canConfirm = draft !== null && profileId !== null && !nameIsEmpty && !confirming;
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.eyebrow}>CAMERA + OCR</Text>
+      <Text style={styles.hint}>
+        Photograph or pick a label. Real OCR (Tesseract) runs on the backend — then check every
+        field before adding, because label reads are rarely perfect.
+      </Text>
+
+      <View style={styles.buttonRow}>
+        <Button
+          title="Take photo"
+          onPress={() => void pickAndScan('camera')}
+          style={styles.flexButton}
+        />
+        <Button
+          title="Choose photo"
+          variant="secondary"
+          onPress={() => void pickAndScan('library')}
+          style={styles.flexButton}
+        />
+      </View>
+
+      {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
+
+      {scanning && (
+        <View style={styles.row}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Reading label…</Text>
+        </View>
+      )}
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {unreadable && (
+        <Card>
+          <Text style={styles.sectionTitle}>Couldn&apos;t read this label</Text>
+          <Text style={styles.muted}>
+            No text came back at all. That is almost always the photo rather than the label:
+            hold steady until it focuses, add light, and fill the frame with the text. Blur is
+            the usual culprit — past a certain point the characters simply aren&apos;t in the
+            image.
+          </Text>
+          <Button title="Take another photo" onPress={() => void pickAndScan('camera')} />
+          <Button title="Discard" variant="secondary" onPress={reset} />
+        </Card>
+      )}
+
+      {result && draft && !unreadable && (
+        <Card>
+          <Text style={styles.sectionTitle}>Check and correct</Text>
+          <Text style={[styles.muted, result.confidence < LOW_CONFIDENCE && styles.warnText]}>
+            OCR confidence: {Math.round(result.confidence * 100)}%
+            {result.confidence < LOW_CONFIDENCE ? ' — low, check each field carefully' : ''}
+          </Text>
+
+          <LabeledInput
+            label="Product name"
+            value={draft.name}
+            onChangeText={(name) => setDraft({ ...draft, name })}
+            placeholder="e.g. Whole milk"
+          />
+          {nameIsEmpty && <Text style={styles.errorText}>A name is required.</Text>}
+
+          <Pressable accessibilityRole="button" onPress={swapNameAndBrand} style={styles.disclosure}>
+            <Text style={styles.disclosureText}>⇅ Swap name and brand</Text>
+          </Pressable>
+
+          <LabeledInput
+            label="Brand"
+            value={draft.brand}
+            onChangeText={(brand) => setDraft({ ...draft, brand })}
+            placeholder="Optional"
+          />
+          <LabeledInput
+            label="Printed date"
+            value={draft.printedDate}
+            onChangeText={(printedDate) => setDraft({ ...draft, printedDate })}
+            placeholder="e.g. Sep 5"
+          />
+          <LabeledInput
+            label="Package size"
+            value={draft.packageSize}
+            onChangeText={(packageSize) => setDraft({ ...draft, packageSize })}
+            placeholder="e.g. 1 gal"
+          />
+          <LabeledInput
+            label="Lot code"
+            value={draft.lotCode}
+            onChangeText={(lotCode) => setDraft({ ...draft, lotCode })}
+            placeholder="Optional"
+          />
+
+          <Text style={styles.fieldLabel}>Food category</Text>
+          {profileId === null && (
+            <Text style={styles.warnText}>
+              OCR didn&apos;t recognise this food — pick a category so the freshness budget is right.
+            </Text>
+          )}
+          <View style={styles.chipRow}>
+            {profiles.map((profile) => (
+              <Chip
+                key={profile.id}
+                label={profile.name}
+                selected={profile.id === profileId}
+                onPress={() => setProfileId(profile.id)}
+              />
+            ))}
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowRawText((shown) => !shown)}
+            style={styles.disclosure}>
+            <Text style={styles.disclosureText}>
+              {showRawText ? 'Hide raw OCR text' : 'Show raw OCR text'}
+            </Text>
+          </Pressable>
+          {showRawText && (
+            <Text style={styles.rawText}>{result.raw_text || '(Tesseract returned nothing)'}</Text>
+          )}
+
+          <Button
+            title={confirming ? 'Adding…' : 'Confirm & add to fridge'}
+            disabled={!canConfirm}
+            onPress={() => void confirm()}
+          />
+          <Button title="Discard" variant="secondary" disabled={confirming} onPress={reset} />
+        </Card>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
+  eyebrow: { ...eyebrow, color: colors.textDim },
+  hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
+  muted: { color: colors.textMuted, fontSize: fontSize.sm },
+  warnText: { color: colors.warning, fontSize: fontSize.sm, lineHeight: 18 },
+  errorText: { color: colors.danger, fontSize: fontSize.sm },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  flexButton: { flex: 1 },
+  preview: { width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: colors.surface },
+  sectionTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: spacing.sm },
+  disclosure: { paddingVertical: spacing.xs },
+  disclosureText: { color: colors.accentText, fontSize: fontSize.xs, fontWeight: '600' },
+  rawText: {
+    color: colors.codeText,
+    fontSize: fontSize.xs,
+    backgroundColor: colors.inputBg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    lineHeight: 16,
+  },
+});
