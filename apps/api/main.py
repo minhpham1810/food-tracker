@@ -150,6 +150,8 @@ async def ocr_scan(image: UploadFile = File(...)):
         return await run_in_threadpool(ocr_module.scan_image, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ocr_module.VisionOCRError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/ocr/confirm", response_model=ItemOut, status_code=201)

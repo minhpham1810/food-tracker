@@ -63,6 +63,7 @@ def scan_image(image_bytes: bytes) -> dict:
     if engine not in {"qwen", "tesseract"}:
         raise ValueError("OCR_ENGINE must be 'qwen' or 'tesseract'")
 
+    qwen_error: Exception | None = None
     if engine == "qwen":
         try:
             result = extract_label(image)
@@ -82,9 +83,20 @@ def scan_image(image_bytes: bytes) -> dict:
                 "suggested_profile_id": _match_profile(profile_text),
             }
         except (httpx.HTTPError, VisionOCRError) as exc:
+            qwen_error = exc
             logger.warning("Qwen vision OCR unavailable; falling back to Tesseract: %s", exc)
 
-    return _scan_with_tesseract(image)
+    try:
+        return _scan_with_tesseract(image)
+    except pytesseract.TesseractNotFoundError as exc:
+        if qwen_error is not None:
+            raise VisionOCRError(
+                f"Qwen vision OCR failed ({qwen_error}); "
+                "the Tesseract fallback is not installed"
+            ) from exc
+        raise VisionOCRError(
+            "Tesseract OCR is not installed or is not available on PATH"
+        ) from exc
 
 
 def _load_image(image_bytes: bytes) -> Image.Image:

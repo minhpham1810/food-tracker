@@ -72,6 +72,11 @@ def extract_label(image: Image.Image) -> VisionLabel:
         json={
             "model": _setting("OCR_MODEL", "LLM_MODEL", "OMLX_MODEL", default=DEFAULT_MODEL),
             "stream": False,
+            # Ollama enables reasoning by default for thinking-capable models such
+            # as Qwen 3.5. OCR only needs the schema-bound final answer, and some
+            # Ollama/Qwen combinations can exhaust the response in `thinking`
+            # without producing `message.content`, which leaves no JSON to parse.
+            "think": False,
             "format": LABEL_SCHEMA,
             "options": {"temperature": 0},
             "keep_alive": os.environ.get("OCR_KEEP_ALIVE", "10m"),

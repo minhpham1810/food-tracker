@@ -227,6 +227,7 @@ def test_qwen_vision_extracts_structured_label_fields(monkeypatch):
     assert captured["payload"]["messages"][0]["images"]
     assert captured["payload"]["format"]["type"] == "object"
     assert captured["payload"]["options"]["temperature"] == 0
+    assert captured["payload"]["think"] is False
 
 
 def test_qwen_vision_drops_fields_not_grounded_in_transcription(monkeypatch):
@@ -304,3 +305,31 @@ def test_qwen_vision_falls_back_to_tesseract_when_ollama_is_unavailable(monkeypa
     assert fallback_called is True
     assert "Milk" in response.json()["product_name"]
     assert response.json()["suggested_profile_id"] == "milk"
+
+
+def test_qwen_failure_reports_unavailable_tesseract_cleanly(monkeypatch):
+    import pytesseract
+
+    from apps.api import ocr as ocr_module
+    from apps.api.vision_ocr import VisionOCRError
+
+    monkeypatch.setenv("OCR_ENGINE", "qwen")
+
+    def invalid_qwen_response(image):
+        raise VisionOCRError("invalid response")
+
+    def missing_tesseract(image):
+        raise pytesseract.TesseractNotFoundError()
+
+    monkeypatch.setattr(ocr_module, "extract_label", invalid_qwen_response)
+    monkeypatch.setattr(ocr_module, "_scan_with_tesseract", missing_tesseract)
+    response = client.post(
+        "/api/ocr/scan",
+        files={"image": ("label.png", render_label(["placeholder"]), "image/png")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Qwen vision OCR failed (invalid response); "
+        "the Tesseract fallback is not installed"
+    )
