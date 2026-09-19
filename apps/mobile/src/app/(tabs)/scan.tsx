@@ -6,8 +6,10 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
+import { DateTimeField } from '@/components/DateTimeField';
 import { LabeledInput } from '@/components/LabeledInput';
 import { getProfiles, ocrConfirm, ocrScan } from '@/lib/api';
+import { formatPrintedDate, parsePrintedDate } from '@/lib/dates';
 import { colors, eyebrow, fontSize, radius, spacing } from '@/lib/theme';
 import type { FoodProfile, OCRResult } from '@/lib/types';
 
@@ -19,9 +21,8 @@ const MAX_PHOTOS = 5;
 interface Draft {
   name: string;
   brand: string;
-  printedDate: string;
+  printedDate: Date | null;
   packageSize: string;
-  lotCode: string;
 }
 
 function emptyToNull(value: string): string | null {
@@ -110,9 +111,8 @@ export default function ScanScreen() {
       setDraft({
         name: scanned.product_name,
         brand: scanned.brand ?? '',
-        printedDate: scanned.printed_date ?? '',
+        printedDate: parsePrintedDate(scanned.printed_date),
         packageSize: scanned.package_size ?? '',
-        lotCode: scanned.lot_code ?? '',
       });
       setProfileId(scanned.suggested_profile_id);
     } catch (err) {
@@ -131,9 +131,9 @@ export default function ScanScreen() {
         profile_id: profileId,
         name: emptyToNull(draft.name),
         brand: emptyToNull(draft.brand),
-        printed_date: emptyToNull(draft.printedDate),
+        printed_date: draft.printedDate ? formatPrintedDate(draft.printedDate) : null,
         package_size: emptyToNull(draft.packageSize),
-        lot_code: emptyToNull(draft.lotCode),
+        lot_code: null,
       });
       reset();
       router.push('/');
@@ -155,6 +155,11 @@ export default function ScanScreen() {
     setDraft({ ...draft, name: draft.brand, brand: draft.name });
   };
 
+  // OCR found a date but it isn't in a form we can parse; show it so the user can pick it by hand.
+  const unparsedDateHint =
+    result?.printed_date && parsePrintedDate(result.printed_date) === null
+      ? `Label reads "${result.printed_date}"`
+      : undefined;
   const unreadable = result !== null && result.raw_text.trim().length === 0;
   const nameIsEmpty = draft !== null && draft.name.trim().length === 0;
   const canConfirm = draft !== null && profileId !== null && !nameIsEmpty && !confirming;
@@ -271,23 +276,17 @@ export default function ScanScreen() {
             onChangeText={(brand) => setDraft({ ...draft, brand })}
             placeholder="Optional"
           />
-          <LabeledInput
+          <DateTimeField
             label="Printed date"
             value={draft.printedDate}
-            onChangeText={(printedDate) => setDraft({ ...draft, printedDate })}
-            placeholder="e.g. Sep 5"
+            onChange={(printedDate) => setDraft({ ...draft, printedDate })}
+            hint={unparsedDateHint}
           />
           <LabeledInput
             label="Package size"
             value={draft.packageSize}
             onChangeText={(packageSize) => setDraft({ ...draft, packageSize })}
             placeholder="e.g. 1 gal"
-          />
-          <LabeledInput
-            label="Lot code"
-            value={draft.lotCode}
-            onChangeText={(lotCode) => setDraft({ ...draft, lotCode })}
-            placeholder="Optional"
           />
 
           <Text style={styles.fieldLabel}>Food category</Text>
