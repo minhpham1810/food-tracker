@@ -1,20 +1,23 @@
-"""Real OCR extraction (Tesseract) for the scan -> confirm -> add-item flow.
+"""Food-label extraction for the scan -> confirm -> add-item flow.
 
-`scan_image` runs pytesseract against an uploaded label photo and parses the raw text
-into best-effort product fields with simple regex heuristics -- this is judge/demo-grade
-label reading, not a robust retail-OCR product. Swapping the parsing heuristics or the
-OCR engine itself should not require changing the `/api/ocr/*` contract.
+Qwen vision is the primary structured extractor. Tesseract remains an offline fallback,
+and the `/api/ocr/*` contract stays independent of either engine.
 """
 
 from dataclasses import dataclass
 import io
+import logging
+import os
 import re
 
+import httpx
 import pillow_heif
 import pytesseract
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from engine.profiles import load_profiles
+
+from .vision_ocr import VisionOCRError, extract_label
 
 # iPhone camera/photo-library captures are HEIC by default; vanilla Pillow can't open
 # them without this. Registering the opener makes Image.open() handle .heic/.heif
@@ -43,6 +46,8 @@ _ROTATIONS = (0, 90, 180, 270)
 # alone -- scores between angles often sit close together on a busy photo.
 _ROTATION_MARGIN = 1.3
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class _Line:
@@ -53,10 +58,40 @@ class _Line:
 
 
 def scan_image(image_bytes: bytes) -> dict:
+    image = _load_image(image_bytes)
+    engine = os.environ.get("OCR_ENGINE", "qwen").strip().lower()
+    if engine not in {"qwen", "tesseract"}:
+        raise ValueError("OCR_ENGINE must be 'qwen' or 'tesseract'")
+
+    if engine == "qwen":
+        try:
+            result = extract_label(image)
+            profile_text = " ".join(
+                value
+                for value in (result.raw_text, result.product_name, result.brand)
+                if value
+            )
+            return {
+                "product_name": result.product_name,
+                "brand": result.brand,
+                "printed_date": result.printed_date,
+                "package_size": result.package_size,
+                "lot_code": result.lot_code,
+                "raw_text": result.raw_text,
+                "confidence": result.confidence,
+                "suggested_profile_id": _match_profile(profile_text),
+            }
+        except (httpx.HTTPError, VisionOCRError) as exc:
+            logger.warning("Qwen vision OCR unavailable; falling back to Tesseract: %s", exc)
+
+    return _scan_with_tesseract(image)
+
+
+def _load_image(image_bytes: bytes) -> Image.Image:
     try:
         image = Image.open(io.BytesIO(image_bytes))
         image.load()
-    except UnidentifiedImageError as exc:
+    except (UnidentifiedImageError, OSError) as exc:
         raise ValueError("Unable to read image") from exc
 
     # Phone cameras store the sensor frame and record the display rotation in EXIF
@@ -70,6 +105,11 @@ def scan_image(image_bytes: bytes) -> dict:
     if image.mode not in ("RGB", "L"):
         image = image.convert("RGB")
     image.format = None
+    return image
+
+
+def _scan_with_tesseract(image: Image.Image) -> dict:
+    """Run the original deterministic OCR path as an explicit fallback."""
 
     # EXIF only covers cameras that wrote the tag; a screenshot, a crop or a photo of
     # a sideways carton can still arrive rotated, so confirm against the pixels.

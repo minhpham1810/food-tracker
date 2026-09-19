@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine.models import TelemetrySample
@@ -144,7 +145,9 @@ def set_category(item_id: str, payload: CategoryIn):
 async def ocr_scan(image: UploadFile = File(...)):
     content = await image.read()
     try:
-        return ocr_module.scan_image(content)
+        # Vision inference can take tens of seconds during a cold model load. Keep
+        # the event loop free so health, inventory, and telemetry requests continue.
+        return await run_in_threadpool(ocr_module.scan_image, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

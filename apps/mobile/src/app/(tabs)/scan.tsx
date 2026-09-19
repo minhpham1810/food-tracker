@@ -11,7 +11,7 @@ import { getProfiles, ocrConfirm, ocrScan } from '@/lib/api';
 import { colors, eyebrow, fontSize, radius, spacing } from '@/lib/theme';
 import type { FoodProfile, OCRResult } from '@/lib/types';
 
-/** Below this, Tesseract's read is unreliable enough to warn about explicitly. */
+/** Below this, the extracted fields need an explicit warning. */
 const LOW_CONFIDENCE = 0.6;
 
 /** The editable form behind the OCR result. Every field is user-correctable. */
@@ -137,8 +137,8 @@ export default function ScanScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>CAMERA + OCR</Text>
       <Text style={styles.hint}>
-        Photograph or pick a label. Real OCR (Tesseract) runs on the backend — then check every
-        field before adding, because label reads are rarely perfect.
+        Photograph or pick a label. Local Qwen vision reads it on the backend, with Tesseract as
+        an offline fallback. Check every field before adding because label reads are rarely perfect.
       </Text>
 
       <View style={styles.buttonRow}>
@@ -251,7 +251,7 @@ export default function ScanScreen() {
             </Text>
           </Pressable>
           {showRawText && (
-            <Text style={styles.rawText}>{result.raw_text || '(Tesseract returned nothing)'}</Text>
+            <Text style={styles.rawText}>{result.raw_text || '(No label text was recognized)'}</Text>
           )}
 
           <Button

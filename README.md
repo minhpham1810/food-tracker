@@ -28,11 +28,18 @@ installed Python 3.12+), activate it with `.\.venv\Scripts\Activate.ps1`, and us
 The API documentation is at <http://localhost:8010/docs>. Inventory and telemetry
 are held in memory and reset when the server restarts.
 
-Label scanning and the real OCR tests require the **Tesseract executable** on
-PATH. On macOS, install it with `brew install tesseract`; on Debian/Ubuntu, use
-`sudo apt install tesseract-ocr`. PNG/JPEG and HEIC photos are supported, including
-orientation correction. Installing the Python dependencies alone does not install
-Tesseract. Check with `tesseract --version`.
+Label scanning uses the local `qwen3.5:9b` model as a structured vision extractor.
+It transcribes the label, returns only fields grounded in that transcription, and
+leaves every field editable before an item is created. PNG/JPEG and HEIC photos are
+supported. Configure the model with the `OCR_*` values in the root `.env`; set
+`OCR_ENGINE=tesseract` to bypass Qwen.
+
+Tesseract remains the automatic offline fallback when Ollama is unreachable or
+returns an invalid structured response. Using that fallback and running its real OCR
+tests require the **Tesseract executable** on PATH. On macOS, install it with
+`brew install tesseract`; on Debian/Ubuntu, use `sudo apt install tesseract-ocr`.
+Installing the Python dependencies alone does not install Tesseract. Check with
+`tesseract --version`.
 
 The assistant needs a separately running OpenAI-compatible model server. The
 default configuration uses [Ollama](https://ollama.com) on port **11434** with
@@ -143,7 +150,7 @@ flowchart LR
     SERVICE <--> STORE[In-memory store]
     APP[Expo app] --> API[FastAPI]
     API --> SERVICE
-    API --> OCR[Tesseract OCR]
+    API --> OCR[Qwen vision OCR<br/>Tesseract fallback]
     API --> LLM[Model gateway and validated tools]
     LLM --> SERVICE
 ```
