@@ -19,7 +19,9 @@ class TelemetrySample:
     timestamp: float
     temperature: float
     humidity: float
-    gas_resistance: float
+    # None when the sensor sent no usable gas reading. Temperature still burns
+    # the budget; the gas track just has nothing to score for that sample.
+    gas_resistance: float | None
     door_open: bool
 
 

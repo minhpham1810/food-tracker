@@ -61,6 +61,26 @@ def test_gas_baseline_is_fitted_automatically_after_clean_history():
     assert service.snapshot().telemetry.gas_anomaly is not None
 
 
+def test_samples_without_gas_still_burn_budget_but_skip_gas_track():
+    service = FreshnessService(seed_hero_items=False)
+    item = service.add_item("dairy")
+    for i in range(30):
+        service.ingest(TelemetrySample(i * 60, 22.0, 52.0, None, False))
+    assert service.get_item(item.id).t_eff > 0
+    assert service.store.gas_baseline is None
+    assert service.store.last_gas_baseline_sample_count == 0
+    assert service.snapshot().telemetry.gas_anomaly is None
+
+
+def test_gas_anomaly_is_unavailable_when_the_latest_sample_has_no_gas():
+    service = FreshnessService(seed_hero_items=False)
+    for i in range(20):
+        service.ingest(TelemetrySample(i * 60, 4.0 + i * 0.01, 60.0, 200000.0 - i * 50, False))
+    service.ingest(TelemetrySample(20 * 60, 4.2, 60.0, None, False))
+    assert service.store.gas_baseline is not None
+    assert service.snapshot().telemetry.gas_anomaly is None
+
+
 def test_contradiction_scenario_surfaces_secondary_disagreement():
     from simulator.scenarios import generate_scenario
 

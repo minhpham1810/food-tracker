@@ -1,9 +1,11 @@
 """Live telemetry from the BME688 ThingSpeak channel.
 
-The sensor uploads roughly every 20 s. The channel's field mapping is fixed by
-the uploader: field1 temperature (C), field2 humidity (%RH), field7 raw gas
-resistance (ohm). The other fields (pressure, BSEC IAQ outputs) are not used by
-the engine. The sensor has no door switch, so every sample is door-closed.
+The sensor uploads roughly every 20 s. field1 is temperature (C) and field2 is
+humidity (%RH). The gas track needs raw gas resistance in ohms, which the
+uploader does not always publish (its field7 has also carried a VOC percentage),
+so the gas field is opt-in through THINGSPEAK_GAS_FIELD. Without it, samples
+carry no gas reading and only the temperature track runs. The sensor has no door
+switch, so every sample is door-closed.
 """
 
 from __future__ import annotations
@@ -32,6 +34,8 @@ class ThingSpeakConfig:
     channel_id: str
     read_api_key: str | None
     poll_seconds: float
+    # The field holding raw gas resistance in ohms, e.g. "field7". None skips gas.
+    gas_field: str | None = None
 
     @classmethod
     def from_env(cls) -> ThingSpeakConfig | None:
@@ -43,26 +47,50 @@ class ThingSpeakConfig:
             channel_id=channel_id,
             read_api_key=os.environ.get("THINGSPEAK_READ_API_KEY", "").strip() or None,
             poll_seconds=float(os.environ.get("THINGSPEAK_POLL_SECONDS", "15")),
+            gas_field=os.environ.get("THINGSPEAK_GAS_FIELD", "").strip() or None,
         )
 
 
-def parse_feed(feeds: list[dict]) -> list[tuple[int, TelemetrySample]]:
+def _gas_reading(entry: dict, gas_field: str | None) -> float | None:
+    """Raw gas resistance, or None when absent or non-positive (the uploader
+    sends -1 while the sensor warms up)."""
+    if gas_field is None:
+        return None
+    try:
+        value = float(entry[gas_field])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return value if value > 0.0 else None
+
+
+def _entry_id(entry: dict) -> int | None:
+    try:
+        return int(entry["entry_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def parse_feed(
+    feeds: list[dict], gas_field: str | None = None
+) -> list[tuple[int, TelemetrySample]]:
     """Turn ThingSpeak feed entries into (entry_id, sample) pairs.
 
-    Entries with a missing or out-of-range reading are dropped rather than
-    guessed at, using the same limits as TelemetryIn.
+    Entries with a missing or out-of-range temperature or humidity are dropped
+    rather than guessed at, using the same limits as TelemetryIn. A bad gas
+    reading only clears the sample's gas_resistance.
     """
     parsed: list[tuple[int, TelemetrySample]] = []
     for entry in feeds:
+        entry_id = _entry_id(entry)
+        if entry_id is None:
+            continue
         try:
-            entry_id = int(entry["entry_id"])
             timestamp = datetime.fromisoformat(entry["created_at"].replace("Z", "+00:00"))
             temperature = float(entry["field1"])
             humidity = float(entry["field2"])
-            gas_resistance = float(entry["field7"])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, AttributeError):
             continue
-        if not 0.0 <= humidity <= 100.0 or gas_resistance <= 0.0:
+        if not 0.0 <= humidity <= 100.0:
             continue
         parsed.append(
             (
@@ -71,7 +99,7 @@ def parse_feed(feeds: list[dict]) -> list[tuple[int, TelemetrySample]]:
                     timestamp=timestamp.timestamp(),
                     temperature=temperature,
                     humidity=humidity,
-                    gas_resistance=gas_resistance,
+                    gas_resistance=_gas_reading(entry, gas_field),
                     door_open=False,
                 ),
             )
@@ -140,14 +168,26 @@ class ThingSpeakPoller:
         if not isinstance(body, dict):
             raise ValueError("ThingSpeak rejected the read; check THINGSPEAK_READ_API_KEY")
 
-        ingested = 0
-        for entry_id, sample in parse_feed(body.get("feeds") or []):
-            if self.last_entry_id is not None and entry_id <= self.last_entry_id:
-                continue
+        fresh = [
+            entry
+            for entry in body.get("feeds") or []
+            if (entry_id := _entry_id(entry)) is not None
+            and (self.last_entry_id is None or entry_id > self.last_entry_id)
+        ]
+        parsed = parse_feed(fresh, self._config.gas_field)
+        if len(parsed) < len(fresh):
+            logger.warning(
+                "ThingSpeak: skipped %d of %d new entries with a missing or invalid "
+                "temperature/humidity reading; check the channel's field mapping",
+                len(fresh) - len(parsed),
+                len(fresh),
+            )
+        for _, sample in parsed:
             self._ingest(sample)
-            self.last_entry_id = entry_id
-            ingested += 1
-        return ingested
+        # Advance past skipped entries too, so each one is reported only once.
+        if fresh:
+            self.last_entry_id = max(_entry_id(entry) for entry in fresh)
+        return len(parsed)
 
     async def _run(self) -> None:
         while True:

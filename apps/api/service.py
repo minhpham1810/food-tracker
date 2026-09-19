@@ -160,7 +160,8 @@ class FreshnessService:
     def fit_gas_baseline_from_history(self, min_samples: int = 20):
         if min_samples <= 0:
             raise ValueError("min_samples must be positive")
-        conditioned = condition_samples(self.store.telemetry_history)
+        with_gas = [s for s in self.store.telemetry_history if s.gas_resistance is not None]
+        conditioned = condition_samples(with_gas)
         eligible = gas_baseline_samples(conditioned)
         if len(eligible) < min_samples:
             self.store.last_gas_baseline_sample_count = len(eligible)
@@ -222,7 +223,7 @@ class FreshnessService:
     def _latest_gas_anomaly(self) -> float | None:
         latest = self.store.latest_telemetry
         baseline = self.store.gas_baseline
-        if latest is None or baseline is None:
+        if latest is None or baseline is None or latest.gas_resistance is None:
             return None
         return float(
             gas_anomaly(
