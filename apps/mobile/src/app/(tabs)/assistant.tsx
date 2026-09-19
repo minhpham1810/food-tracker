@@ -94,8 +94,8 @@ export default function AssistantScreen() {
               <Card style={styles.noticeCard}>
                 <Text style={styles.noticeTitle}>Assistant is offline</Text>
                 <Text style={styles.noticeBody}>
-                  This tab needs a local OpenAI-compatible model server (set
-                  {' '}<Text style={styles.code}>OMLX_BASE_URL</Text> before starting the API).
+                  This tab needs Ollama or another OpenAI-compatible model server (set
+                  {' '}<Text style={styles.code}>LLM_BASE_URL</Text> before starting the API).
                   Everything else in the app — freshness tracking, scanning, alerts — works
                   without it.
                 </Text>

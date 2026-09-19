@@ -11,6 +11,43 @@ def make_dispatcher():
     return ToolDispatcher(service), item.id
 
 
+def test_gateway_defaults_to_ollama(monkeypatch):
+    for name in (
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+        "LLM_API_KEY",
+        "OMLX_BASE_URL",
+        "OMLX_MODEL",
+        "OMLX_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    dispatcher, _ = make_dispatcher()
+    gateway = LLMGateway(dispatcher)
+
+    assert gateway.base_url == "http://127.0.0.1:11434/v1"
+    assert gateway.model == "qwen3.5:9b"
+    assert gateway.api_key == ""
+
+
+def test_gateway_prefers_llm_variables_and_supports_legacy_aliases(monkeypatch):
+    dispatcher, _ = make_dispatcher()
+    monkeypatch.setenv("OMLX_BASE_URL", "http://legacy.test/v1")
+    monkeypatch.setenv("OMLX_MODEL", "legacy-model")
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    legacy = LLMGateway(dispatcher)
+    assert legacy.base_url == "http://legacy.test/v1"
+    assert legacy.model == "legacy-model"
+
+    monkeypatch.setenv("LLM_BASE_URL", "http://preferred.test/v1/")
+    monkeypatch.setenv("LLM_MODEL", "preferred-model")
+    preferred = LLMGateway(dispatcher)
+    assert preferred.base_url == "http://preferred.test/v1"
+    assert preferred.model == "preferred-model"
+
+
 def test_dispatcher_rejects_unknown_tool():
     dispatcher, _ = make_dispatcher()
     with pytest.raises(ValueError):

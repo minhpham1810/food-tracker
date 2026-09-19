@@ -34,13 +34,22 @@ PATH. On macOS, install it with `brew install tesseract`; on Debian/Ubuntu, use
 orientation correction. Installing the Python dependencies alone does not install
 Tesseract. Check with `tesseract --version`.
 
-The assistant needs a separately running model server supporting OpenAI-compatible
-tool calls. Configure `OMLX_BASE_URL`, `OMLX_MODEL`, and optionally `OMLX_API_KEY`
-in the root `.env`. The example points at a model server on port **8000**; the
-Freshness API uses **8010**. These variables also work with compatible servers
-other than oMLX. Model selection must match a model installed in that server.
-Other API features work without a model server. Use `--env-file .env` to load the
-file; the app does not automatically load it.
+The assistant needs a separately running OpenAI-compatible model server. The
+default configuration uses [Ollama](https://ollama.com) on port **11434** with
+the tool-capable `qwen3.5:9b` model:
+
+```sh
+ollama pull qwen3.5:9b
+ollama show qwen3.5:9b
+```
+
+The `ollama show` output must list `tools` under capabilities. Start Ollama before
+using the assistant; the Freshness API continues to use port **8010**. The backend
+automatically loads `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` from the root
+`.env`. Shell environment variables take precedence. Compatible servers such as
+LM Studio and oMLX can be selected by changing those values; the legacy `OMLX_*`
+names remain supported as fallbacks. Other API features work without a model
+server.
 
 ## Mobile setup
 

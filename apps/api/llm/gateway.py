@@ -1,21 +1,20 @@
-"""Client for the local LLM (oMLX, OpenAI-compatible tool-calling API).
+"""Client for a local OpenAI-compatible tool-calling API.
 
-Runtime is swappable in principle -- anything speaking the OpenAI /v1/chat/completions
-tool-calling wire format works -- but this project runs against oMLX on Apple Silicon
-(see OMLX_BASE_URL/OMLX_MODEL/OMLX_API_KEY in .env.example).
+This project defaults to Ollama. Other compatible servers remain supported, and
+the older OMLX_* environment variable names are retained as fallbacks.
 """
 
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 
+from ..config import env_with_fallback
 from .tools import TOOL_SCHEMAS, ToolDispatcher
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
-DEFAULT_MODEL = "Qwen3.5-9B-OptiQ-4bit"
+DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
+DEFAULT_MODEL = "qwen3.5:9b"
 
 SYSTEM_PROMPT = (
     "You are the Freshness Tracker fridge assistant. You can only observe and change "
@@ -34,12 +33,18 @@ class LLMGateway:
         base_url: str | None = None,
         model: str | None = None,
         api_key: str | None = None,
-        timeout: float = 30.0,
+        timeout: float = 120.0,
     ):
         self.dispatcher = dispatcher
-        self.base_url = (base_url or os.environ.get("OMLX_BASE_URL", DEFAULT_BASE_URL)).rstrip("/")
-        self.model = model or os.environ.get("OMLX_MODEL", DEFAULT_MODEL)
-        self.api_key = api_key if api_key is not None else os.environ.get("OMLX_API_KEY", "")
+        self.base_url = (
+            base_url or env_with_fallback("LLM_BASE_URL", "OMLX_BASE_URL", DEFAULT_BASE_URL)
+        ).rstrip("/")
+        self.model = model or env_with_fallback("LLM_MODEL", "OMLX_MODEL", DEFAULT_MODEL)
+        self.api_key = (
+            api_key
+            if api_key is not None
+            else env_with_fallback("LLM_API_KEY", "OMLX_API_KEY", "")
+        )
         self.timeout = timeout
 
     def converse(self, user_message: str, max_tool_rounds: int = 4) -> dict:
