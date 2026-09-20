@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import { colors, radius, shadows, spacing } from '@/lib/theme';
+import { radius, shadows, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   children: ReactNode;
@@ -9,10 +9,12 @@ interface Props {
 }
 
 export function Card({ children, style }: Props) {
+  const styles = useStyles(makeStyles);
   return <View style={[styles.card, shadows.card, style]}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

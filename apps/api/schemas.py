@@ -48,10 +48,13 @@ class OCRResultOut(BaseModel):
     raw_text: str
     confidence: float
     suggested_profile_id: str | None
+    # Claim ticket for the scan's stored thumbnail; pass it back on confirm.
+    scan_id: str | None = None
 
 
 class OCRConfirmIn(BaseModel):
     profile_id: str
+    scan_id: str | None = None
     name: str | None = None
     brand: str | None = None
     printed_date: str | None = None
@@ -108,6 +111,7 @@ class ItemOut(BaseModel):
     printed_date: str | None = None
     package_size: str | None = None
     lot_code: str | None = None
+    has_photo: bool = False
 
 
 class AppStateOut(BaseModel):

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from './Button';
-import { colors, fontSize, spacing } from '@/lib/theme';
+import { fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   message: string;
@@ -13,6 +13,7 @@ interface Props {
  * a failed first fetch left the screen on a spinner forever with no retry.
  */
 export function ErrorState({ message, onRetry }: Props) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Can&apos;t reach the backend</Text>
@@ -22,7 +23,8 @@ export function ErrorState({ message, onRetry }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',

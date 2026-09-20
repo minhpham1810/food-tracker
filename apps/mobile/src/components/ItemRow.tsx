@@ -1,8 +1,10 @@
+import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FreshnessBar } from './FreshnessBar';
-import { colors, fontSize, radius, spacing, statusColors } from '@/lib/theme';
+import { itemPhotoUrl } from '@/lib/api';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
 
 interface Props {
@@ -19,10 +21,13 @@ export function itemMeta(item: ItemState): string | null {
 
 /**
  * List-view row for a fridge item, laid out like a Google Drive
- * file row: leading badge, name + meta, trailing number. Detail and actions
+ * file row: leading badge (the label photo when the item was scanned, otherwise
+ * its initial), name + meta, trailing number. Detail and actions
  * live one tap away rather than repeating per row.
  */
 export function ItemRow({ item, highlighted = false }: Props) {
+  const styles = useStyles(makeStyles);
+  const { statusColors } = useTheme();
   const palette = statusColors[item.status];
   const meta = itemMeta(item);
 
@@ -40,9 +45,20 @@ export function ItemRow({ item, highlighted = false }: Props) {
             : styles.row
         }>
         <View style={[styles.badge, { backgroundColor: palette.wash, borderColor: palette.border }]}>
-          <Text style={[styles.badgeText, { color: palette.fg }]}>
-            {item.name.trim().charAt(0).toUpperCase() || '?'}
-          </Text>
+          {item.has_photo === true ? (
+            <Image
+              source={{ uri: itemPhotoUrl(item.id) }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              // The photo never changes, and the fridge list re-renders on every poll.
+              cachePolicy="memory-disk"
+              transition={120}
+            />
+          ) : (
+            <Text style={[styles.badgeText, { color: palette.fg }]}>
+              {item.name.trim().charAt(0).toUpperCase() || '?'}
+            </Text>
+          )}
         </View>
 
         <View style={styles.body}>
@@ -66,7 +82,8 @@ export function ItemRow({ item, highlighted = false }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -86,6 +103,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: radius.sm,
     borderWidth: 1,
+    // Clips the photo to the rounded corners.
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { colors } from '@/lib/theme';
+import { ThemeProvider, useTheme } from '@/lib/theme';
 
 /**
  * Root stack. The tab bar lives in (tabs); anything declared here pushes *over*
@@ -10,9 +10,22 @@ import { colors } from '@/lib/theme';
  */
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      {/* Screens paint a near-black background, so the status bar needs light glyphs. */}
-      <StatusBar style="light" />
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <RootStack />
+      </SafeAreaProvider>
+    </ThemeProvider>
+  );
+}
+
+// Split out because it reads the theme, which the provider above it supplies.
+function RootStack() {
+  const { colors, scheme } = useTheme();
+
+  return (
+    <>
+      {/* Not style="auto": that follows the OS, which the user can override here. */}
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.surface },
@@ -26,6 +39,6 @@ export default function RootLayout() {
         <Stack.Screen name="add-item" options={{ title: 'Add manually' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       </Stack>
-    </SafeAreaProvider>
+    </>
   );
 }

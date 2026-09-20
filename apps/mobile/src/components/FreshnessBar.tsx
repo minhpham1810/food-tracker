@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import type { ItemState } from '@/lib/types';
-import { colors, radius, statusColors } from '@/lib/theme';
+import { radius, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 
 /**
  * Days at which the bar reads as completely full. Anything with more runway than
@@ -24,6 +24,8 @@ interface Props {
  * invisible. days_left already carries the temperature history and the B/C fusion.
  */
 export function FreshnessBar({ daysLeft, status }: Props) {
+  const styles = useStyles(makeStyles);
+  const { statusColors } = useTheme();
   const fraction = Math.max(0, Math.min(1, daysLeft / URGENCY_HORIZON_DAYS));
   const palette = statusColors[status];
 
@@ -39,7 +41,8 @@ export function FreshnessBar({ daysLeft, status }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   track: {
     height: 6,
     backgroundColor: colors.border,

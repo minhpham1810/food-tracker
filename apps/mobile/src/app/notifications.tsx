@@ -6,7 +6,7 @@ import { AlertsBanner } from '@/components/AlertsBanner';
 import { Card } from '@/components/Card';
 import { ErrorState } from '@/components/ErrorState';
 import { getState } from '@/lib/api';
-import { colors, eyebrow, fontSize, spacing } from '@/lib/theme';
+import { eyebrow, fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { AppState } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -19,6 +19,8 @@ const UNREACHABLE =
  * payload as the Fridge screen, polled only while open.
  */
 export default function NotificationsScreen() {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,7 +94,8 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   center: {

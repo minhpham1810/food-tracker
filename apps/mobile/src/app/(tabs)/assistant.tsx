@@ -13,7 +13,15 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { sendAssistantMessage } from '@/lib/api';
-import { colors, eyebrow, fontSize, radius, spacing } from '@/lib/theme';
+import {
+  eyebrow,
+  fontSize,
+  radius,
+  spacing,
+  useStyles,
+  useTheme,
+  type ThemeColors,
+} from '@/lib/theme';
 import type { AssistantToolCall } from '@/lib/types';
 
 interface Exchange {
@@ -37,6 +45,8 @@ function isUnreachable(error: unknown): boolean {
 }
 
 export default function AssistantScreen() {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const [message, setMessage] = useState('');
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [sending, setSending] = useState(false);
@@ -165,7 +175,8 @@ export default function AssistantScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { gap: spacing.md, marginBottom: spacing.md },
   hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },

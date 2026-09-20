@@ -35,6 +35,7 @@ class ItemState:
     printed_date: str | None
     package_size: str | None
     lot_code: str | None
+    has_photo: bool
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class FreshnessService:
         printed_date: str | None = None,
         package_size: str | None = None,
         lot_code: str | None = None,
+        photo: bytes | None = None,
     ) -> ItemState:
         profile = self.profiles.get(profile_id)
         if profile is None:
@@ -90,12 +92,31 @@ class FreshnessService:
             printed_date=printed_date,
             package_size=package_size,
             lot_code=lot_code,
+            photo=photo,
         )
         self.store.items[item.id] = item
         return self._item_state(item)
 
     def get_item(self, item_id: str) -> ItemState:
         return self._item_state(self._get_item(item_id))
+
+    def get_item_photo(self, item_id: str) -> bytes:
+        photo = self._get_item(item_id).photo
+        if photo is None:
+            raise KeyError(f"Item {item_id} has no photo")
+        return photo
+
+    def stash_scan_photo(self, photo: bytes) -> str:
+        """Hold a scan's thumbnail until the confirm step creates its item."""
+        scan_id = uuid4().hex[:12]
+        self.store.stash_scan_photo(scan_id, photo)
+        return scan_id
+
+    def take_scan_photo(self, scan_id: str | None) -> bytes | None:
+        """Claim a stashed thumbnail. A stale or unknown id simply means no photo."""
+        if scan_id is None:
+            return None
+        return self.store.scan_photos.pop(scan_id, None)
 
     def rename_item(self, item_id: str, name: str) -> ItemState:
         name = name.strip()
@@ -269,6 +290,7 @@ class FreshnessService:
             printed_date=item.printed_date,
             package_size=item.package_size,
             lot_code=item.lot_code,
+            has_photo=item.photo is not None,
         )
 
     def _refresh_alerts(self) -> None:

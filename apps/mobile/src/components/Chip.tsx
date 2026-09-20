@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   label: string;
@@ -10,6 +10,7 @@ interface Props {
 
 /** Single-select chip -- food category pickers on the scan and add-item screens. */
 export function Chip({ label, selected, onPress }: Props) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       accessibilityRole="button"
@@ -21,7 +22,8 @@ export function Chip({ label, selected, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   chip: {
     borderColor: colors.borderStrong,
     borderWidth: 1,

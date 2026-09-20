@@ -18,7 +18,7 @@ import { NotificationsBell } from '@/components/NotificationsBell';
 import { TelemetryStrip } from '@/components/TelemetryStrip';
 import { ViewModeToggle, type ViewMode } from '@/components/ViewModeToggle';
 import { getState } from '@/lib/api';
-import { colors, eyebrow, fontSize, spacing } from '@/lib/theme';
+import { eyebrow, fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { AppState } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -27,10 +27,12 @@ const UNREACHABLE =
   'Check that the API is running and that EXPO_PUBLIC_API_BASE_URL points at this machine’s LAN IP.';
 
 export default function FridgeScreen() {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const navigation = useNavigation();
 
   // Alerts live on the notifications screen; the bell's badge is how this
@@ -156,7 +158,8 @@ export default function FridgeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: {
     flex: 1,

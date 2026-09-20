@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 
-import { colors, shadows } from '@/lib/theme';
+import { shadows, useStyles, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   onPress?: (e: GestureResponderEvent) => void;
@@ -16,6 +16,7 @@ const BAR = 3;
  * the scan screen, which also links to manual entry.
  */
 export function AddTabButton({ onPress, onLongPress, accessibilityState }: Props) {
+  const styles = useStyles(makeStyles);
   const selected = accessibilityState?.selected ?? false;
 
   return (
@@ -36,7 +37,8 @@ export function AddTabButton({ onPress, onLongPress, accessibilityState }: Props
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   slot: { flex: 1, alignItems: 'center' },
   circle: {
     width: SIZE,

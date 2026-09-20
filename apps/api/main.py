@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -149,6 +149,18 @@ def set_category(item_id: str, payload: CategoryIn):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/items/{item_id}/photo")
+def get_item_photo(item_id: str):
+    """The scan thumbnail, or 404 for a manually-added item."""
+    try:
+        photo = service.get_item_photo(item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # Immutable once the item exists, and the URL is keyed by item id.
+    return Response(content=photo, media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.post("/api/ocr/scan", response_model=OCRResultOut)
 async def ocr_scan(
     images: list[UploadFile] | None = File(default=None),
@@ -165,7 +177,11 @@ async def ocr_scan(
     try:
         # Vision inference can take tens of seconds during a cold model load. Keep
         # the event loop free so health, inventory, and telemetry requests continue.
-        return await run_in_threadpool(ocr_module.scan_images, contents)
+        result = await run_in_threadpool(ocr_module.scan_images, contents)
+        # The first photo is the one the user framed at the product, so it is the
+        # one worth keeping as the item's thumbnail.
+        thumbnail = await run_in_threadpool(ocr_module.thumbnail, contents[0])
+        return {**result, "scan_id": service.stash_scan_photo(thumbnail)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, ocr_module.VisionOCRError) as exc:
@@ -182,6 +198,7 @@ def ocr_confirm(payload: OCRConfirmIn):
             printed_date=payload.printed_date,
             package_size=payload.package_size,
             lot_code=payload.lot_code,
+            photo=service.take_scan_photo(payload.scan_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

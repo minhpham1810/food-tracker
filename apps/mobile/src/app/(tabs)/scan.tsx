@@ -10,7 +10,7 @@ import { DateTimeField } from '@/components/DateTimeField';
 import { LabeledInput } from '@/components/LabeledInput';
 import { getProfiles, ocrConfirm, ocrScan } from '@/lib/api';
 import { formatPrintedDate, parsePrintedDate } from '@/lib/dates';
-import { colors, eyebrow, fontSize, radius, spacing } from '@/lib/theme';
+import { eyebrow, fontSize, radius, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { FoodProfile, OCRResult } from '@/lib/types';
 
 /** Below this, the extracted fields need an explicit warning. */
@@ -31,6 +31,7 @@ function emptyToNull(value: string): string | null {
 }
 
 export default function ScanScreen() {
+  const styles = useStyles(makeStyles);
   const router = useRouter();
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -133,6 +134,8 @@ export default function ScanScreen() {
     try {
       await ocrConfirm({
         profile_id: profileId,
+        // Adopts the photo this scan already uploaded as the item's thumbnail.
+        scan_id: result?.scan_id ?? null,
         name: emptyToNull(draft.name),
         brand: emptyToNull(draft.brand),
         printed_date: draft.printedDate ? formatPrintedDate(draft.printedDate) : null,
@@ -342,7 +345,8 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
   eyebrow: { ...eyebrow, color: colors.textDim },

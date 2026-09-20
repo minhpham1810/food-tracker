@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   /** Active alerts; a badge shows when this is above zero. */
@@ -10,6 +10,8 @@ interface Props {
 
 /** Fridge header action -- opens the notifications screen. */
 export function NotificationsBell({ count }: Props) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const label = count > 0 ? `Notifications, ${count} active` : 'Notifications';
 
   return (
@@ -31,6 +33,7 @@ export function NotificationsBell({ count }: Props) {
 const STROKE = 1.8;
 
 function BellIcon({ color, size = 22 }: { color: ColorValue; size?: number }) {
+  const styles = useStyles(makeStyles);
   const dome = size * 0.62;
   return (
     <View style={[styles.frame, { width: size, height: size }]}>
@@ -62,7 +65,8 @@ function BellIcon({ color, size = 22 }: { color: ColorValue; size?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   button: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   frame: { alignItems: 'center', justifyContent: 'center' },
   badge: {

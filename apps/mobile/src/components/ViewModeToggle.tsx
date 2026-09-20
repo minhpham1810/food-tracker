@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View, type ColorValue } from 'react-native';
 
-import { colors, radius, spacing } from '@/lib/theme';
+import { radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 
 export type ViewMode = 'list' | 'grid';
 
@@ -14,6 +14,8 @@ interface Props {
  * switch *to*, not the one you are in.
  */
 export function ViewModeToggle({ mode, onChange }: Props) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const next: ViewMode = mode === 'list' ? 'grid' : 'list';
 
   return (
@@ -37,6 +39,7 @@ export function ViewModeToggle({ mode, onChange }: Props) {
 const STROKE = 1.8;
 
 function GridViewIcon({ color, size = 18 }: { color: ColorValue; size?: number }) {
+  const styles = useStyles(makeStyles);
   const cell = (size - 3) / 2;
   const square = { width: cell, height: cell, borderWidth: STROKE, borderColor: color, borderRadius: 2 };
   return (
@@ -50,6 +53,7 @@ function GridViewIcon({ color, size = 18 }: { color: ColorValue; size?: number }
 }
 
 function ListViewIcon({ color, size = 18 }: { color: ColorValue; size?: number }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={[styles.lines, { width: size, height: size }]}>
       {[0, 1, 2].map((line) => (
@@ -62,7 +66,8 @@ function ListViewIcon({ color, size = 18 }: { color: ColorValue; size?: number }
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   button: {
     padding: spacing.xs + 2,
     borderRadius: radius.sm,

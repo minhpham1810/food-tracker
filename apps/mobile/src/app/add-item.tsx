@@ -7,10 +7,11 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { LabeledInput } from '@/components/LabeledInput';
 import { addItem, getProfiles } from '@/lib/api';
-import { colors, eyebrow, fontSize, spacing } from '@/lib/theme';
+import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { FoodProfile } from '@/lib/types';
 
 export default function AddItemScreen() {
+  const styles = useStyles(makeStyles);
   const router = useRouter();
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -88,7 +89,8 @@ export default function AddItemScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.md },
   hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },

@@ -2,7 +2,7 @@ import DateTimePicker from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   label: string;
@@ -30,6 +30,8 @@ function display(date: Date): string {
  * @expo/ui picker renders nothing on web, so the field is read-only there.
  */
 export function DateTimeField({ label, value, onChange, hint }: Props) {
+  const styles = useStyles(makeStyles);
+  const { colors, scheme } = useTheme();
   const [iosOpen, setIosOpen] = useState(false);
   const [androidStep, setAndroidStep] = useState<'date' | 'time' | null>(null);
   const [androidDraft, setAndroidDraft] = useState<Date>(() => value ?? new Date());
@@ -78,7 +80,7 @@ export function DateTimeField({ label, value, onChange, hint }: Props) {
             value={value}
             mode="datetime"
             display="inline"
-            themeVariant="dark"
+            themeVariant={scheme}
             accentColor={colors.accent}
             onValueChange={(_event, date) => onChange(date)}
           />
@@ -129,7 +131,8 @@ export function DateTimeField({ label, value, onChange, hint }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   wrapper: { gap: spacing.xs },
   label: { color: colors.textMuted, fontSize: fontSize.xs },
   // Same box as LabeledInput so the form reads as one set of fields.

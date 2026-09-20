@@ -18,6 +18,8 @@ export interface ItemState {
   printed_date?: string | null;
   package_size?: string | null;
   lot_code?: string | null;
+  /** True when the item was scanned and the backend kept the label photo. */
+  has_photo?: boolean;
 }
 
 /** Mirrors ProfileOut in apps/api/schemas.py -- served from engine/foods.json. */
@@ -64,6 +66,8 @@ export interface OCRResult {
   raw_text: string;
   confidence: number;
   suggested_profile_id: string | null;
+  /** Claim ticket for the scan's stored photo; hand it back on confirm. */
+  scan_id: string | null;
 }
 
 export interface AssistantToolCall {

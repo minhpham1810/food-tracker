@@ -37,6 +37,10 @@ _LOT_PATTERN = re.compile(r"\bLOT\s*#?\s*([A-Za-z0-9-]+)", re.IGNORECASE)
 # Orientation probe: four cheap passes on a downscaled copy decide the angle
 # before the real OCR run happens once at full resolution.
 _PROBE_MAX_EDGE = 1000
+
+# Longest edge of the stored item thumbnail. Twice the widest grid tile on a
+# 3x device, so it stays sharp without keeping the capture-size photo.
+_THUMBNAIL_MAX_EDGE = 512
 _ROTATIONS = (0, 90, 180, 270)
 # How much better than upright a rotation must score before it is applied.
 # Upright is nearly always right once EXIF has been honoured, and rotating a
@@ -92,6 +96,21 @@ def scan_images(image_bytes: list[bytes]) -> dict:
         raise VisionOCRError(
             "Tesseract OCR is not installed or is not available on PATH"
         ) from exc
+
+
+def thumbnail(image_bytes: bytes) -> bytes:
+    """Re-encode a label photo as a small JPEG for use as the item's thumbnail.
+
+    The originals are multi-megabyte HEICs and the store keeps them in memory for
+    the item's whole life, so they are never kept at capture size.
+    """
+    image = _load_image(image_bytes)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    image.thumbnail((_THUMBNAIL_MAX_EDGE, _THUMBNAIL_MAX_EDGE))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=80)
+    return buffer.getvalue()
 
 
 def _load_image(image_bytes: bytes) -> Image.Image:

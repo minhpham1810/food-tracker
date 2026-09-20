@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 
 interface Props {
   label: string;
@@ -10,6 +10,8 @@ interface Props {
 }
 
 export function LabeledInput({ label, value, onChangeText, placeholder }: Props) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
@@ -26,7 +28,8 @@ export function LabeledInput({ label, value, onChangeText, placeholder }: Props)
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   wrapper: { gap: spacing.xs },
   label: { color: colors.textMuted, fontSize: fontSize.xs },
   input: {

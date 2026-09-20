@@ -1,9 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { Alert } from '@/lib/types';
 
-function palette(severity: string) {
+function palette(severity: string, colors: ThemeColors) {
   if (severity === 'warning') {
     return { bg: colors.warningBg, border: colors.warningBorder, fg: colors.warning };
   }
@@ -14,12 +14,15 @@ function palette(severity: string) {
 }
 
 export function AlertsBanner({ alerts }: { alerts: Alert[] }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
+
   if (alerts.length === 0) return null;
 
   return (
     <View style={styles.stack}>
       {alerts.map((alert) => {
-        const p = palette(alert.severity);
+        const p = palette(alert.severity, colors);
         return (
           <View
             key={alert.code}
@@ -32,7 +35,8 @@ export function AlertsBanner({ alerts }: { alerts: Alert[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   stack: { gap: spacing.sm, marginBottom: spacing.sm + 2 },
   row: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   text: { fontSize: fontSize.sm, lineHeight: 18 },

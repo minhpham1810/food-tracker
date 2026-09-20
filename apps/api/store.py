@@ -3,6 +3,8 @@ from typing import Optional
 
 from engine.models import GasBaseline, TelemetrySample
 
+_MAX_PENDING_SCAN_PHOTOS = 20
+
 
 @dataclass
 class ItemRecord:
@@ -18,6 +20,8 @@ class ItemRecord:
     printed_date: str | None = None
     package_size: str | None = None
     lot_code: str | None = None
+    # JPEG thumbnail of the label photo this item was scanned from, if any.
+    photo: bytes | None = None
 
 
 @dataclass
@@ -37,6 +41,14 @@ class AppStore:
     alerts: list[AlertRecord] = field(default_factory=list)
     active_scenario: str | None = None
     telemetry_paused: bool = False
+    # Thumbnails from /ocr/scan waiting for the /ocr/confirm that adopts them.
+    # A scan the user abandons never gets collected, hence the cap.
+    scan_photos: dict[str, bytes] = field(default_factory=dict)
+
+    def stash_scan_photo(self, scan_id: str, photo: bytes) -> None:
+        self.scan_photos[scan_id] = photo
+        for stale in list(self.scan_photos)[:-_MAX_PENDING_SCAN_PHOTOS]:
+            del self.scan_photos[stale]
 
     def append_telemetry(self, sample: TelemetrySample) -> None:
         self.telemetry_history.append(sample)

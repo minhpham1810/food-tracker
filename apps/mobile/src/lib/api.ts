@@ -81,6 +81,11 @@ export async function deleteItem(itemId: string): Promise<void> {
   }
 }
 
+/** Thumbnail from the scan that created the item; 404s for manual adds. */
+export function itemPhotoUrl(itemId: string): string {
+  return `${API_BASE}/items/${itemId}/photo`;
+}
+
 export function getItem(itemId: string): Promise<ItemState> {
   return request(`/items/${itemId}`);
 }
@@ -147,6 +152,8 @@ export async function ocrScan(photoUris: string[]): Promise<OCRResult> {
  */
 export interface OCRConfirmPayload {
   profile_id: string;
+  /** From the scan response; makes the backend keep that photo as the thumbnail. */
+  scan_id: string | null;
   name: string | null;
   brand: string | null;
   printed_date: string | null;

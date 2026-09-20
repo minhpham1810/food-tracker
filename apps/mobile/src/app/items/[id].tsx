@@ -26,14 +26,14 @@ import {
   setLabelScore,
 } from '@/lib/api';
 import {
-  colors,
-  confidenceColors,
   eyebrow,
   fontSize,
   radius,
   shadows,
   spacing,
-  statusColors,
+  useStyles,
+  useTheme,
+  type ThemeColors,
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
 
@@ -64,6 +64,8 @@ function percent(value: number | null, fallback: string): string {
 }
 
 export default function ItemDetailScreen() {
+  const styles = useStyles(makeStyles);
+  const { colors, statusColors, confidenceColors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [item, setItem] = useState<ItemState | null>(null);
@@ -274,7 +276,8 @@ export default function ItemDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
   center: {

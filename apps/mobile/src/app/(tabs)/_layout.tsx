@@ -3,13 +3,18 @@ import { Tabs } from 'expo-router';
 import { AddTabButton } from '@/components/AddTabButton';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { AssistantIcon, FridgeIcon } from '@/components/TabBarIcon';
-import { colors } from '@/lib/theme';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { useTheme } from '@/lib/theme';
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerTitleAlign: 'center',
+        // Reachable from every tab; the app has no settings screen to put it on.
+        headerLeft: () => <ThemeToggle />,
         headerStyle: { backgroundColor: colors.surface },
         headerTitleStyle: { color: colors.text },
         headerTintColor: colors.text,

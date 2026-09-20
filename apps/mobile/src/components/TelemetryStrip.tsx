@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from './Card';
-import { colors, eyebrow, fontSize, spacing } from '@/lib/theme';
+import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { TelemetryState } from '@/lib/types';
 
 const UNAVAILABLE = 'Unavailable';
@@ -43,6 +43,7 @@ interface Props {
 }
 
 export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
+  const styles = useStyles(makeStyles);
   return (
     <Card style={styles.card}>
       <View style={styles.headerRow}>
@@ -65,7 +66,8 @@ export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   card: { marginBottom: spacing.lg },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { ...eyebrow, color: colors.textDim },

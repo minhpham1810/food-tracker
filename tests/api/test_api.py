@@ -121,3 +121,39 @@ def test_assistant_endpoint_returns_502_when_local_llm_is_unreachable(monkeypatc
     client = TestClient(app)
     response = client.post("/api/assistant/message", json={"message": "hello"})
     assert response.status_code == 502
+
+
+def test_scan_photo_becomes_the_item_thumbnail():
+    import io
+
+    from PIL import Image
+
+    from apps.api.main import service
+    from apps.api.ocr import thumbnail
+
+    source = io.BytesIO()
+    Image.new("RGB", (1800, 1200), (120, 40, 40)).save(source, format="PNG")
+    # The scan route is not called here: it needs a vision model. It hands the
+    # same thumbnail to the same stash.
+    scan_id = service.stash_scan_photo(thumbnail(source.getvalue()))
+
+    created = client.post(
+        "/api/ocr/confirm", json={"profile_id": "dairy", "name": "Scanned milk", "scan_id": scan_id}
+    )
+    assert created.status_code == 201
+    item_id = created.json()["id"]
+    assert created.json()["has_photo"] is True
+
+    photo = client.get(f"/api/items/{item_id}/photo")
+    assert photo.status_code == 200
+    assert photo.headers["content-type"] == "image/jpeg"
+    stored = Image.open(io.BytesIO(photo.content))
+    assert max(stored.size) == 512
+
+    # A scan id is single-use, so a second confirm cannot adopt the same photo.
+    again = client.post("/api/ocr/confirm", json={"profile_id": "dairy", "scan_id": scan_id})
+    assert again.json()["has_photo"] is False
+
+    manual = client.post("/api/items", json={"profile_id": "dairy", "name": "Typed in"})
+    assert manual.json()["has_photo"] is False
+    assert client.get(f"/api/items/{manual.json()['id']}/photo").status_code == 404
