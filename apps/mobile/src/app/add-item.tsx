@@ -7,12 +7,14 @@ import { Card } from '@/components/Card';
 import { Chip } from '@/components/Chip';
 import { LabeledInput } from '@/components/LabeledInput';
 import { addItem, getProfiles } from '@/lib/api';
+import { formatTemperature, useSettings } from '@/lib/settings';
 import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { FoodProfile } from '@/lib/types';
 
 export default function AddItemScreen() {
   const styles = useStyles(makeStyles);
   const router = useRouter();
+  const { temperatureUnit } = useSettings();
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -66,7 +68,8 @@ export default function AddItemScreen() {
 
         {selected !== null && (
           <Text style={styles.footnote}>
-            {selected.name} starts with a {selected.d0_days}-day budget at 4 °C
+            {selected.name} starts with a {selected.d0_days}-day budget at{' '}
+            {formatTemperature(4, temperatureUnit)}
             {' '}({selected.opened_d0_days} days once opened), Q10 {selected.q10}.
             {selected.placeholder ? ' These are demo coefficients, not validated data.' : ''}
           </Text>

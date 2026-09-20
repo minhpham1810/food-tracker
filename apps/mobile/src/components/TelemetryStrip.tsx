@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { Card } from './Card';
+import { formatTemperature, useSettings, type TemperatureUnit } from '@/lib/settings';
 import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { TelemetryState } from '@/lib/types';
 
@@ -17,11 +18,12 @@ interface Cell {
   alarm?: boolean;
 }
 
-function buildCells(t: TelemetryState): Cell[] {
+function buildCells(t: TelemetryState, temperatureUnit: TemperatureUnit): Cell[] {
   return [
     {
       label: 'Temperature',
-      value: t.temperature == null ? UNAVAILABLE : `${t.temperature.toFixed(1)} °C`,
+      value:
+        t.temperature == null ? UNAVAILABLE : formatTemperature(t.temperature, temperatureUnit),
       alarm: t.temperature != null && t.temperature > WARM_FRIDGE_C,
     },
     {
@@ -51,6 +53,7 @@ interface Props {
 
 export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
   const styles = useStyles(makeStyles);
+  const { temperatureUnit } = useSettings();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 10000);
@@ -70,7 +73,7 @@ export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
         </Text>
       </View>
       <View style={styles.grid}>
-        {buildCells(telemetry).map((cell) => (
+        {buildCells(telemetry, temperatureUnit).map((cell) => (
           <View key={cell.label} style={styles.cell}>
             <Text style={styles.cellLabel}>{cell.label}</Text>
             <Text style={[styles.cellValue, cell.alarm && styles.cellValueAlarm]}>

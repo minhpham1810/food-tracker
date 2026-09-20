@@ -38,6 +38,7 @@ import {
 import type { FoodProfile, ItemState } from '@/lib/types';
 import { parsePrintedDate } from '@/lib/dates';
 import { estimateText, dayBudgetText } from '@/lib/estimate';
+import { formatTemperature, useSettings } from '@/lib/settings';
 
 const statusCopy: Record<ItemState['status'], string> = {
   fresh: 'Tracks aligned with the temperature-history forecast.',
@@ -68,6 +69,7 @@ function percent(value: number | null, fallback: string): string {
 export default function ItemDetailScreen() {
   const styles = useStyles(makeStyles);
   const { colors, statusColors, confidenceColors } = useTheme();
+  const { temperatureUnit } = useSettings();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [item, setItem] = useState<ItemState | null>(null);
@@ -165,7 +167,10 @@ export default function ItemDetailScreen() {
           <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
         </View>
         {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
-        <Text style={styles.statusCopy}>assuming continued storage at {item.projection_temperature_c}C</Text>
+        <Text style={styles.statusCopy}>
+          assuming continued storage at{' '}
+          {formatTemperature(item.projection_temperature_c, temperatureUnit)}
+        </Text>
         <Text style={styles.footnote}>Profile: {item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
         <Text style={styles.footnote}>Tracking started: {new Date(item.created_at * 1000).toLocaleString()}</Text>
         {item.estimate_message && <Text style={styles.statusCopy}>{item.estimate_message}</Text>}

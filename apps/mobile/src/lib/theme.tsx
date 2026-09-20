@@ -10,7 +10,16 @@
  * through `useTheme()`.
  */
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Platform, useColorScheme, type ViewStyle } from 'react-native';
 
 import type { ItemState } from './types';
@@ -225,6 +234,8 @@ export type ThemePreference = ColorScheme | 'system';
 
 export const THEME_PREFERENCES: ThemePreference[] = ['system', 'light', 'dark'];
 
+const THEME_PREFERENCE_KEY = 'freshness-tracker.theme-preference';
+
 interface Theme {
   scheme: ColorScheme;
   preference: ThemePreference;
@@ -256,7 +267,26 @@ const ThemeContext = createContext<Theme>({
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const [preference, setPreference] = useState<ThemePreference>('system');
+  const [preference, setPreferenceState] = useState<ThemePreference>('system');
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(THEME_PREFERENCE_KEY)
+      .then((stored) => {
+        if (active && THEME_PREFERENCES.includes(stored as ThemePreference)) {
+          setPreferenceState(stored as ThemePreference);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const setPreference = useCallback((next: ThemePreference) => {
+    setPreferenceState(next);
+    void AsyncStorage.setItem(THEME_PREFERENCE_KEY, next).catch(() => undefined);
+  }, []);
 
   const value = useMemo<Theme>(() => {
     // useColorScheme is 'unspecified'/null until the OS answers; dark is this

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SplashOverlay } from '@/components/SplashOverlay';
+import { SettingsProvider } from '@/lib/settings';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 
 /**
@@ -11,12 +12,14 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
  */
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <SafeAreaProvider>
-        <RootStack />
-        <SplashOverlay />
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <SettingsProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <RootStack />
+          <SplashOverlay />
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </SettingsProvider>
   );
 }
 
@@ -40,6 +43,8 @@ function RootStack() {
         <Stack.Screen name="items/[id]" options={{ title: 'Item detail' }} />
         <Stack.Screen name="add-item" options={{ title: 'Add manually' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="user-manual" options={{ title: 'User manual' }} />
       </Stack>
     </>
   );

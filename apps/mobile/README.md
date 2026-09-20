@@ -13,6 +13,8 @@ before changing SDK integrations.
   editable fields and category, confirm inventory entry.
 - Assistant: typed or voice-transcribed messages and tool-call results from the
   optional model server.
+- Settings: persistent Celsius/Fahrenheit and appearance preferences, plus an
+  in-app user manual.
 
 Profiles come from the backend. An unavailable gas baseline is displayed as
 unavailable, not as evidence of freshness. Profile values are demo coefficients.
@@ -41,7 +43,9 @@ multi-select from the library, photo removal, permission denial, scan correction
 confirmation, an unreachable backend, and assistant success/unavailability. Check empty
 inventory and telemetry without a gas baseline. In a native build, check voice permission
 approval and denial, interim transcription, manual stop, transcript editing, and sending the
-transcribed question. Start a scenario using the root guide and check dashboard refresh.
+transcribed question. Change the temperature unit and appearance, restart the app, and confirm
+both preferences persist. Check every user-manual section. Start a scenario using the root guide
+and check dashboard refresh.
 
 ## Current limitations
 

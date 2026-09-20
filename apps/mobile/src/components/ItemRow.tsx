@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FreshnessBar } from './FreshnessBar';
 import { itemPhotoUrl } from '@/lib/api';
+import { formatTemperature, useSettings } from '@/lib/settings';
 import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
 import { estimateText } from '@/lib/estimate';
@@ -29,6 +30,7 @@ export function itemMeta(item: ItemState): string | null {
 export function ItemRow({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
+  const { temperatureUnit } = useSettings();
   const palette = statusColors[item.status];
   const meta = itemMeta(item);
 
@@ -72,7 +74,10 @@ export function ItemRow({ item, highlighted = false }: Props) {
             </Text>
           )}
           {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
-          <Text style={styles.meta}>assuming continued storage at {item.projection_temperature_c}C</Text>
+          <Text style={styles.meta}>
+            assuming continued storage at{' '}
+            {formatTemperature(item.projection_temperature_c, temperatureUnit)}
+          </Text>
           <Text style={styles.meta}>{item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
           <Text style={styles.meta}>Tracked since {new Date(item.created_at * 1000).toLocaleDateString()}</Text>
           {(item.history_message || item.estimate_message) && <Text style={styles.meta}>{item.history_message || item.estimate_message}</Text>}
