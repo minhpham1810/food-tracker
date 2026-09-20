@@ -6,7 +6,7 @@ import { FreshnessBar } from './FreshnessBar';
 import { itemPhotoUrl } from '@/lib/api';
 import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
-import { estimate } from '@/lib/estimate';
+import { estimate, statusLabel } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
@@ -18,6 +18,12 @@ interface Props {
 export function itemMeta(item: ItemState): string | null {
   const parts = [item.brand, item.opened ? 'Opened' : null].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** Sentence-case status word for the meta line and tile badge, e.g. "Fresh". */
+export function statusWord(status: ItemState['status']): string {
+  const label = statusLabel[status];
+  return label.charAt(0) + label.slice(1).toLowerCase();
 }
 
 /**
@@ -67,11 +73,10 @@ export function ItemRow({ item, highlighted = false }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
-          {meta !== null && (
-            <Text style={styles.meta} numberOfLines={1}>
-              {meta}
-            </Text>
-          )}
+          <Text style={styles.meta} numberOfLines={1}>
+            <Text style={{ color: palette.fg }}>{statusWord(item.status)}</Text>
+            {meta !== null ? ` · ${meta}` : ''}
+          </Text>
           {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
         </View>
 

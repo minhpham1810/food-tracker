@@ -8,6 +8,14 @@ export interface Estimate {
   label: string;
 }
 
+/** Short form of the fused status -- the hero eyebrow on the detail screen. */
+export const statusLabel: Record<ItemState['status'], string> = {
+  fresh: 'FRESH',
+  check_early: 'CHECK EARLY',
+  past_budget_quiet: 'PAST BUDGET',
+  discard_quality_signal: 'DISCARD',
+};
+
 export function estimate(item: ItemState): Estimate {
   if (item.outside_model_range) return { value: null, label: 'Outside modelled range' };
   return dayBudget(item.days_left);

@@ -8,7 +8,7 @@ import { Chip } from '@/components/Chip';
 import { LabeledInput } from '@/components/LabeledInput';
 import { addItem, getProfiles } from '@/lib/api';
 import { formatTemperature, useSettings } from '@/lib/settings';
-import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
+import { fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { FoodProfile } from '@/lib/types';
 
 export default function AddItemScreen() {
@@ -53,7 +53,6 @@ export default function AddItemScreen() {
       {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
       <Card>
-        <Text style={styles.eyebrow}>NEW ITEM</Text>
         <Text style={styles.fieldLabel}>Food category</Text>
         <View style={styles.chipRow}>
           {profiles.map((profile) => (
@@ -98,7 +97,6 @@ const makeStyles = (colors: ThemeColors) =>
   content: { padding: spacing.lg, gap: spacing.md },
   hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   errorText: { color: colors.danger, fontSize: fontSize.sm },
-  eyebrow: { ...eyebrow, color: colors.textDim },
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   footnote: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },

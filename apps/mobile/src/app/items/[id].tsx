@@ -37,7 +37,7 @@ import {
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
 import { parsePrintedDate } from '@/lib/dates';
-import { estimate, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS } from '@/lib/estimate';
+import { estimate, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS, statusLabel } from '@/lib/estimate';
 import { formatTemperature, useSettings } from '@/lib/settings';
 
 /** Matches the dashboard's cadence so the aging rate tracks new readings. */
@@ -48,14 +48,6 @@ const statusCopy: Record<ItemState['status'], string> = {
   check_early: "Something's off — check this early.",
   past_budget_quiet: 'Past date but no spoilage signal — inspect before tossing.',
   discard_quality_signal: 'Quality decline signal detected — discard this item.',
-};
-
-/** Short form of the fused status, used as the hero eyebrow. */
-const statusLabel: Record<ItemState['status'], string> = {
-  fresh: 'FRESH',
-  check_early: 'CHECK EARLY',
-  past_budget_quiet: 'PAST BUDGET',
-  discard_quality_signal: 'DISCARD',
 };
 
 /** The three states the two-patch colorimetric label can be scored as. */
@@ -259,7 +251,7 @@ export default function ItemDetailScreen() {
       </Card>
 
       {item.fusion_uncertainty.used_for_estimate ? <Card>
-        <Text style={styles.eyebrow}>EXPERIMENTAL FUSION ENABLED</Text>
+        <Text style={styles.eyebrow}>EXPERIMENTAL FUSION</Text>
 
         <View style={styles.trackRow}>
           <Text style={styles.trackLabel}>Track A · temperature + time</Text>

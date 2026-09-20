@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ErrorState } from '@/components/ErrorState';
 import { ItemRow } from '@/components/ItemRow';
@@ -142,14 +142,12 @@ export default function FridgeScreen() {
               Scan a product label, or add an item by hand if there is nothing to scan.
             </Text>
             <Link href="/scan" asChild>
-              <Pressable accessibilityRole="button" style={styles.emptyAction}>
-                <Text style={styles.emptyActionText}>Scan a label</Text>
-              </Pressable>
+              {/* Link asChild injects the real navigation onPress via prop
+                  composition; Button requires one, so this is a no-op. */}
+              <Button title="Scan a label" onPress={() => {}} />
             </Link>
             <Link href="/add-item" asChild>
-              <Pressable accessibilityRole="button" style={styles.emptyAction}>
-                <Text style={styles.emptyActionText}>Add manually</Text>
-              </Pressable>
+              <Button title="Add manually" variant="secondary" onPress={() => {}} />
             </Link>
           </Card>
         }
@@ -194,6 +192,4 @@ const makeStyles = (colors: ThemeColors) =>
   gridCell: { width: '50%', paddingHorizontal: spacing.xs + 2, paddingBottom: spacing.md },
   emptyCard: { alignItems: 'flex-start' },
   emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  emptyAction: { paddingVertical: spacing.xs },
-  emptyActionText: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '700' },
 });

@@ -10,7 +10,7 @@ import { DateTimeField } from '@/components/DateTimeField';
 import { LabeledInput } from '@/components/LabeledInput';
 import { getProfiles, ocrConfirm, ocrScan } from '@/lib/api';
 import { formatPrintedDate, parsePrintedDate } from '@/lib/dates';
-import { eyebrow, fontSize, radius, spacing, useStyles, type ThemeColors } from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import type { FoodProfile, OCRResult } from '@/lib/types';
 
 /** Below this, the extracted fields need an explicit warning. */
@@ -178,7 +178,6 @@ export default function ScanScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>CAMERA + OCR</Text>
       <Text style={styles.hint}>
         Add up to {MAX_PHOTOS} views of the same package, such as the front, date stamp, and size.
         Local Qwen vision reads them together. Check every field before adding because label reads
@@ -355,7 +354,6 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
-  eyebrow: { ...eyebrow, color: colors.textDim },
   hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   muted: { color: colors.textMuted, fontSize: fontSize.sm },
   warnText: { color: colors.warning, fontSize: fontSize.sm, lineHeight: 18 },

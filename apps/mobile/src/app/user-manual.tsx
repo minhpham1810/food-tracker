@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { Card } from '@/components/Card';
-import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
+import { fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 
 const sections = [
   {
@@ -40,7 +40,7 @@ export default function UserManualScreen() {
       </Text>
       {sections.map((section) => (
         <Card key={section.title}>
-          <Text style={styles.eyebrow}>{section.title.toUpperCase()}</Text>
+          <Text style={styles.heading}>{section.title}</Text>
           <Text style={styles.body}>{section.body}</Text>
         </Card>
       ))}
@@ -53,6 +53,6 @@ const makeStyles = (colors: ThemeColors) =>
     container: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
     intro: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 20 },
-    eyebrow: { ...eyebrow, color: colors.textDim },
+    heading: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
     body: { color: colors.text, fontSize: fontSize.sm, lineHeight: 20 },
   });

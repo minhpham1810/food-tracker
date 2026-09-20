@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FreshnessBar } from './FreshnessBar';
-import { itemMeta } from './ItemRow';
+import { itemMeta, statusWord } from './ItemRow';
 import { itemPhotoUrl } from '@/lib/api';
 import {
   fontSize,
@@ -30,7 +30,7 @@ interface Props {
  */
 export function ItemTile({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
-  const { statusColors } = useTheme();
+  const { statusColors, colors } = useTheme();
   const palette = statusColors[item.status];
   const meta = itemMeta(item);
   const { value, label } = estimate(item);
@@ -56,7 +56,9 @@ export function ItemTile({ item, highlighted = false }: Props) {
               transition={120}
             />
           )}
-          <View style={[styles.statusDot, { backgroundColor: palette.bar }]} />
+          <View style={[styles.statusBadge, { backgroundColor: colors.surface, borderColor: palette.border }]}>
+            <Text style={[styles.statusBadgeText, { color: palette.fg }]}>{statusWord(item.status)}</Text>
+          </View>
           {item.has_photo === true ? (
             // On a photo the number needs its own backdrop, and `bar` rather than
             // `fg`: `fg` is tuned to read on a card, not on a dark scrim.
@@ -111,14 +113,16 @@ const makeStyles = (colors: ThemeColors) =>
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  statusDot: {
+  statusBadge: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 7,
-    height: 7,
+    borderWidth: 1,
     borderRadius: radius.pill,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
   },
+  statusBadgeText: { fontSize: fontSize.xs, fontWeight: '700' },
   numberRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing.xs },
   number: { fontSize: 22, fontWeight: '800', letterSpacing: -1, textAlign: 'center' },
   numberUnit: { color: colors.textMuted, fontSize: fontSize.xs, paddingBottom: 3 },

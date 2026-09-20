@@ -29,7 +29,9 @@ const makeStyles = (colors: ThemeColors) =>
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   selected: {
     backgroundColor: colors.chipSelectedBg,
