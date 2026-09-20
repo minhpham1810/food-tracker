@@ -29,13 +29,11 @@ import {
   useTheme,
   type ThemeColors,
 } from '@/lib/theme';
-import type { AssistantToolCall } from '@/lib/types';
 
 interface Exchange {
   id: string;
   question: string;
   reply?: string;
-  toolCalls?: AssistantToolCall[];
   error?: string;
 }
 
@@ -206,7 +204,7 @@ export default function AssistantScreen() {
       setExchanges((prev) =>
         prev.map((exchange) =>
           exchange.id === id
-            ? { ...exchange, reply: result.reply, toolCalls: result.tool_calls }
+            ? { ...exchange, reply: result.reply }
             : exchange,
         ),
       );
@@ -275,23 +273,6 @@ export default function AssistantScreen() {
             <Text style={styles.question}>{item.question}</Text>
             {item.error && <Text style={styles.errorText}>{item.error}</Text>}
             {item.reply && <Text style={styles.reply}>{item.reply}</Text>}
-            {item.toolCalls && item.toolCalls.length > 0 && (
-              <View style={styles.toolTrace}>
-                <Text style={styles.toolTraceLabel}>TOOL CALLS</Text>
-                {item.toolCalls.map((call, index) => (
-                  <View key={index} style={styles.toolCall}>
-                    <Text style={styles.toolCallText}>
-                      {call.name}({JSON.stringify(call.arguments)})
-                    </Text>
-                    {/* The result is the point: it proves the number came from the
-                        engine rather than from the model. */}
-                    <Text style={styles.toolResultText}>
-                      → {JSON.stringify(call.result)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
             {!item.reply && !item.error && (
               <View style={styles.row}>
                 <ActivityIndicator size="small" />
@@ -384,16 +365,6 @@ const makeStyles = (colors: ThemeColors) =>
   errorText: { color: colors.danger, fontSize: fontSize.sm },
   muted: { color: colors.textMuted, fontSize: fontSize.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  toolTrace: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    paddingTop: spacing.xs + 2,
-    gap: spacing.xs,
-  },
-  toolTraceLabel: { ...eyebrow, color: colors.textDim },
-  toolCall: { gap: 1 },
-  toolCallText: { color: colors.codeText, fontSize: fontSize.xs },
-  toolResultText: { color: colors.textDim, fontSize: fontSize.xs, paddingLeft: spacing.sm },
   composer: {
     padding: spacing.lg,
     paddingTop: spacing.sm,
