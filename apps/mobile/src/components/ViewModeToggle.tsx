@@ -69,8 +69,8 @@ function ListViewIcon({ color, size = 18 }: { color: ColorValue; size?: number }
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   button: {
-    padding: spacing.xs + 2,
-    borderRadius: radius.sm,
+    padding: spacing.sm,
+    borderRadius: radius.pill,
   },
   pressed: { backgroundColor: colors.surfaceRaised },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between' },

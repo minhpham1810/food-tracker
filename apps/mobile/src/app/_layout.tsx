@@ -33,7 +33,7 @@ function RootStack() {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
+          headerStyle: { backgroundColor: colors.bg },
           headerTitleStyle: { color: colors.text },
           headerTintColor: colors.text,
           headerShadowVisible: false,

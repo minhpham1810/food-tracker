@@ -47,13 +47,13 @@ const makeStyles = (colors: ThemeColors) =>
     // Lift it half out of the bar; the ring in the bar's color separates it
     // from the screen content behind.
     marginTop: -SIZE / 3,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.fabBg,
     borderWidth: 4,
-    borderColor: colors.surface,
+    borderColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: { opacity: 0.85 },
-  horizontal: { position: 'absolute', width: SIZE * 0.4, height: BAR, borderRadius: BAR, backgroundColor: colors.bg },
-  vertical: { position: 'absolute', width: BAR, height: SIZE * 0.4, borderRadius: BAR, backgroundColor: colors.bg },
+  horizontal: { position: 'absolute', width: SIZE * 0.4, height: BAR, borderRadius: BAR, backgroundColor: colors.fabFg },
+  vertical: { position: 'absolute', width: BAR, height: SIZE * 0.4, borderRadius: BAR, backgroundColor: colors.fabFg },
 });

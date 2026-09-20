@@ -38,6 +38,6 @@ export function AlertsBanner({ alerts }: { alerts: Alert[] }) {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   stack: { gap: spacing.sm, marginBottom: spacing.sm + 2 },
-  row: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  row: { borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   text: { fontSize: fontSize.sm, lineHeight: 18 },
 });

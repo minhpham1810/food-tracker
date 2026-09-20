@@ -342,9 +342,9 @@ const makeStyles = (colors: ThemeColors) =>
   },
   removePhoto: { alignSelf: 'center', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
   removePhotoText: { color: colors.danger, fontSize: fontSize.xs, fontWeight: '600' },
-  sectionTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  sectionTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '600', letterSpacing: -0.3 },
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: spacing.sm },
   disclosure: { paddingVertical: spacing.xs },
   disclosureText: { color: colors.accentText, fontSize: fontSize.xs, fontWeight: '600' },
-  manualLink: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '700' },
+  manualLink: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '600' },
 });

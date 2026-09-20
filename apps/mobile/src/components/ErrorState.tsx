@@ -33,7 +33,7 @@ const makeStyles = (colors: ThemeColors) =>
     padding: spacing.xl,
     gap: spacing.md,
   },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { color: colors.text, fontSize: fontSize.xl, fontWeight: '600', letterSpacing: -0.4 },
   message: { color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 19 },
   button: { marginTop: spacing.sm, alignSelf: 'stretch' },
 });

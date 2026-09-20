@@ -16,7 +16,7 @@ export function Chip({ label, selected, onPress }: Props) {
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.chip, selected && styles.selected]}>
+      style={({ pressed }) => [styles.chip, selected && styles.selected, pressed && styles.pressed]}>
       <Text style={styles.label}>{label}</Text>
     </Pressable>
   );
@@ -28,7 +28,7 @@ const makeStyles = (colors: ThemeColors) =>
     borderColor: colors.borderStrong,
     borderWidth: 1,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 44,
     justifyContent: 'center',
@@ -37,5 +37,6 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.chipSelectedBg,
     borderColor: colors.chipSelectedBorder,
   },
-  label: { color: colors.text, fontSize: fontSize.sm },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
+  label: { color: colors.text, fontSize: fontSize.sm, fontWeight: '500' },
 });

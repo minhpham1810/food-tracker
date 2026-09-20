@@ -16,11 +16,15 @@ export function NotificationsBell({ count }: Props) {
 
   return (
     <Link href="/notifications" asChild>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.button}>
-        <BellIcon color={colors.text} />
-        {count > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={spacing.sm}>
+        {({ pressed }) => (
+          <View style={[styles.inner, pressed && styles.pressed]}>
+            <BellIcon color={colors.text} />
+            {count > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
+              </View>
+            )}
           </View>
         )}
       </Pressable>
@@ -67,7 +71,8 @@ function BellIcon({ color, size = 22 }: { color: ColorValue; size?: number }) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  button: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  inner: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  pressed: { opacity: 0.6 },
   frame: { alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute',

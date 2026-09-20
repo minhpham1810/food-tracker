@@ -14,7 +14,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerTitleAlign: 'center',
         headerLeft: () => <SettingsButton />,
-        headerStyle: { backgroundColor: colors.surface },
+        headerStyle: { backgroundColor: colors.bg },
         headerTitleStyle: { color: colors.text },
         headerTintColor: colors.text,
         headerShadowVisible: false,
@@ -22,7 +22,7 @@ export default function TabsLayout() {
         // screen, which flashes white on tab switches.
         sceneStyle: { backgroundColor: colors.bg },
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.bg,
           borderTopColor: colors.border,
         },
         tabBarActiveTintColor: colors.accentText,

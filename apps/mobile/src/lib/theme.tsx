@@ -20,7 +20,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Platform, useColorScheme, type ViewStyle } from 'react-native';
+import { Easing, Platform, useColorScheme, type ViewStyle } from 'react-native';
 
 import type { ItemState } from './types';
 
@@ -41,13 +41,19 @@ const darkColors = {
   textMuted: '#BCAE8B',
   textDim: '#8D815F',
 
-  // Interactive -- brand yellow.
+  // Interactive. Brand yellow is the *mark* -- the add button, the active tab,
+  // a selected chip. The primary button is the high-contrast neutral instead,
+  // so the yellow stays a signature rather than becoming chrome.
   accent: '#FFD93D',
   accentText: '#FFD93D',
   codeText: '#F0CE7A',
-  buttonBg: '#4A3A0C',
-  buttonBorder: '#7A5F14',
-  buttonSecondaryBg: '#201B10',
+  // The add button carries the logo's own canary in both schemes -- it is the
+  // one place the mark appears in the app, so it does not get re-toned.
+  fabBg: '#FFD93D',
+  fabFg: '#2A2100',
+  primaryBg: '#FBF5E3',
+  primaryFg: '#14110A',
+  buttonSecondaryBg: 'transparent',
   buttonSecondaryBorder: '#473D26',
   chipSelectedBg: '#4A3A0C',
   chipSelectedBorder: '#C99B1E',
@@ -90,9 +96,11 @@ const lightColors: ThemeColors = {
   accent: '#B26E00',
   accentText: '#8F5A00',
   codeText: '#7A4E00',
-  buttonBg: '#FFD93D',
-  buttonBorder: '#E0B01E',
-  buttonSecondaryBg: '#FFFFFF',
+  fabBg: '#FFD93D',
+  fabFg: '#2A2100',
+  primaryBg: '#2A2100',
+  primaryFg: '#FFF8E1',
+  buttonSecondaryBg: 'transparent',
   buttonSecondaryBorder: '#DCC886',
   chipSelectedBg: '#FFE98F',
   chipSelectedBorder: '#E0B01E',
@@ -182,7 +190,28 @@ const lightConfidenceColors: ConfidenceColors = {
 /** 4-point rhythm. Everything on screen should land on one of these. */
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
-export const radius = { sm: 10, md: 14, lg: 18, xl: 24, pill: 999 } as const;
+export const radius = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 28, pill: 999 } as const;
+
+/**
+ * Nested enclosure -- a plate sitting in a tray, which is what gives a surface
+ * the feel of machined hardware rather than a coloured rectangle. The inner
+ * radius is always the outer minus this gap, so the curves stay concentric;
+ * reuse the same number and the corners never pinch.
+ */
+export const bezel = 6;
+
+/**
+ * One curve for everything that moves. Heavy and decelerating: things arrive
+ * and settle rather than snapping into place. `press` is deliberately faster
+ * than `enter` -- a touch response that takes 400ms reads as lag, not polish.
+ */
+export const motion = {
+  curve: Easing.bezier(0.32, 0.72, 0, 1),
+  enter: 420,
+  press: 120,
+  /** Per-item offset for a staggered list reveal. Short: 12 items still land inside a second. */
+  stagger: 45,
+} as const;
 
 export const fontSize = {
   /** Hero freshness number only. */
@@ -196,9 +225,21 @@ export const fontSize = {
 
 /** Sentence-case section heading. Quiet: the content is the loud part. */
 export const sectionTitle = {
-  fontSize: fontSize.sm,
+  fontSize: fontSize.md,
   fontWeight: '600' as const,
-  letterSpacing: -0.1,
+  letterSpacing: -0.2,
+};
+
+/**
+ * Divider label -- the one place small caps earn their keep: a list section
+ * header has to be read as a boundary, not as content. Never for a sentence;
+ * uppercase destroys word shape and slows real reading down.
+ */
+export const dividerLabel = {
+  fontSize: fontSize.xs,
+  fontWeight: '600' as const,
+  letterSpacing: 0.7,
+  textTransform: 'uppercase' as const,
 };
 
 /**
@@ -212,9 +253,9 @@ export const shadows: { hero: ViewStyle } = {
     android: { elevation: 8 },
     default: {
       shadowColor: '#000',
-      shadowOpacity: 0.18,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 10 },
     },
   }) as ViewStyle,
 };

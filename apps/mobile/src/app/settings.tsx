@@ -114,6 +114,6 @@ const makeStyles = (colors: ThemeColors) =>
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     manualLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     manualText: { flex: 1, gap: spacing.xs },
-    manualTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+    manualTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
     disclaimer: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 17 },
   });

@@ -10,8 +10,6 @@ import { estimate } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
-  /** The most urgent item: marked with a status-color wash, not a label. */
-  highlighted?: boolean;
 }
 
 /**
@@ -19,7 +17,7 @@ interface Props {
  * was scanned, otherwise its initial), name, trailing number. The status word is
  * deliberately absent -- the color already says it, and detail lives one tap away.
  */
-export function ItemRow({ item, highlighted = false }: Props) {
+export function ItemRow({ item }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
   const palette = statusColors[item.status];
@@ -27,17 +25,7 @@ export function ItemRow({ item, highlighted = false }: Props) {
 
   return (
     <Link href={{ pathname: '/items/[id]', params: { id: item.id } }} asChild>
-      <Pressable
-        accessibilityRole="button"
-        style={
-          highlighted
-            ? StyleSheet.flatten([
-                styles.row,
-                styles.highlighted,
-                { backgroundColor: palette.wash, borderColor: palette.border },
-              ])
-            : styles.row
-        }>
+      <Pressable accessibilityRole="button" style={styles.row}>
         <View style={[styles.badge, { backgroundColor: palette.wash, borderColor: palette.border }]}>
           {item.has_photo === true ? (
             <Image
@@ -88,31 +76,26 @@ const makeStyles = (colors: ThemeColors) =>
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
-    // A transparent frame on every row keeps content aligned with the
-    // highlighted row, whose frame is colored.
-    borderWidth: 1,
-    borderColor: 'transparent',
+    borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  // Link asChild rejects a style array, hence the flatten above.
-  highlighted: { borderRadius: radius.md, marginBottom: spacing.xs },
   badge: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
     // Clips the photo to the rounded corners.
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: fontSize.lg, fontWeight: '700' },
+  badgeText: { fontSize: fontSize.lg, fontWeight: '600' },
   body: { flex: 1, gap: 2 },
-  name: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  name: { color: colors.text, fontSize: fontSize.md, fontWeight: '500', letterSpacing: -0.1 },
   meta: { color: colors.textDim, fontSize: fontSize.xs },
   // Caps the trailing block so a long status word can't squeeze the name column.
   trailing: { alignItems: 'flex-end', maxWidth: 84 },
-  days: { fontSize: fontSize.lg, fontWeight: '700' },
+  days: { fontSize: fontSize.xl, fontWeight: '600', letterSpacing: -0.5 },
   daysUnit: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textDim },
-  daysStatus: { fontSize: fontSize.sm, fontWeight: '700', textAlign: 'right' },
+  daysStatus: { fontSize: fontSize.sm, fontWeight: '600', textAlign: 'right' },
 });

@@ -22,7 +22,7 @@ Keep the demo on a trusted local network. This limit is documented, not fixed.
 | --- | --- |
 | Freshness engine | Working. Temperature (Q10 budget), gas anomaly and color-label tracks, fused. Only the temperature track sets remaining freshness; gas and color can only **shorten** it or veto to 0. |
 | Backend API | Working. Items, telemetry, alerts, OCR, assistant, demo control. **All state is in memory** unless `FRESHNESS_DB_PATH` is set. Nothing is seeded: live and demo inventories both start empty. |
-| Live telemetry | Optional. The API polls a ThingSpeak channel when `THINGSPEAK_CHANNEL_ID` is set. The sensor has no door switch, so every live sample counts as door-closed. Gas needs a raw-ohms field (`THINGSPEAK_GAS_FIELD`); without it only the temperature track runs. |
+| Live telemetry | Optional. The API polls a ThingSpeak channel when `THINGSPEAK_CHANNEL_ID` is set. The sensor has no door switch, so every live sample counts as door-closed. Gas comes from the firmware's field4 and only counts when its field7 flags are 63 (all hardware flags set, `iaq_accuracy` 3); below that only the temperature track runs. |
 | Simulator | Working. Synthetic scenarios and Mendeley-style CSV replay, both feeding `service.ingest` directly. |
 | Mobile app | Working on iOS/Android. Fridge dashboard (grid/list), notifications screen, item details (rename, category, mark opened, label score, delete, aging rate, current-conditions correction, storage-temperature suggestion), manual add, multi-photo label scan, voice-capable assistant, persistent Celsius/Fahrenheit and theme settings, in-app user manual, splash overlay. No auth or durable inventory; the API owns inventory state. |
 | Label scan (OCR) | Qwen vision model via Ollama by default (up to 5 photos, all fields editable before confirm). Tesseract is an explicit legacy single-photo mode. |
@@ -136,7 +136,7 @@ Key `.env` values (see `.env.example` for all):
 | --- | --- |
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Assistant model server (legacy `OMLX_*` names still work as fallbacks) |
 | `OCR_ENGINE`, `OCR_BASE_URL`, `OCR_MODEL`, `OCR_TIMEOUT_SECONDS`, `OCR_KEEP_ALIVE` | Label scanning (`qwen` or `tesseract`) |
-| `THINGSPEAK_CHANNEL_ID`, `THINGSPEAK_READ_API_KEY`, `THINGSPEAK_POLL_SECONDS`, `THINGSPEAK_GAS_FIELD` | Optional live telemetry; leave the channel blank to disable |
+| `THINGSPEAK_CHANNEL_ID`, `THINGSPEAK_READ_API_KEY`, `THINGSPEAK_POLL_SECONDS` | Optional live telemetry; leave the channel blank to disable |
 | `FRESHNESS_DATA_DIR` | Where CSV replay files live (default `./data`) |
 
 `apps/api/config.py` loads the root `.env` on import; real environment variables win.

@@ -52,6 +52,6 @@ const makeStyles = (colors: ThemeColors) =>
     container: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
     intro: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 20 },
-    heading: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+    heading: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
     body: { color: colors.text, fontSize: fontSize.sm, lineHeight: 20 },
   });

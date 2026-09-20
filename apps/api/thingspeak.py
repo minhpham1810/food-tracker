@@ -1,11 +1,12 @@
 """Live telemetry from the BME688 ThingSpeak channel.
 
-The sensor uploads roughly every 20 s. field1 is temperature (C) and field2 is
-humidity (%RH). The gas track needs raw gas resistance in ohms, which the
-uploader does not always publish (its field7 has also carried a VOC percentage),
-so the gas field is opt-in through THINGSPEAK_GAS_FIELD. Without it, samples
-carry no gas reading and only the temperature track runs. The sensor has no door
-switch, so every sample is door-closed.
+Field map and the flags bitmask are the firmware's, documented in
+hardware/sketch.cpp: field1 temperature (C), field2 humidity (%RH), field4 raw
+gas resistance (ohm), field7 a quality bitmask whose bits 4-5 hold BSEC's
+iaq_accuracy. The firmware's rule is that gas is usable if and only if all four
+hardware flags are set and iaq_accuracy is 3, i.e. flags == 63; below that the
+sample carries no gas reading and only the temperature track runs. The sensor
+has no door switch, so every sample is door-closed.
 """
 
 from __future__ import annotations
@@ -34,8 +35,6 @@ class ThingSpeakConfig:
     channel_id: str
     read_api_key: str | None
     poll_seconds: float
-    # The field holding raw gas resistance in ohms, e.g. "field7". None skips gas.
-    gas_field: str | None = None
 
     @classmethod
     def from_env(cls) -> ThingSpeakConfig | None:
@@ -47,28 +46,34 @@ class ThingSpeakConfig:
             channel_id=channel_id,
             read_api_key=os.environ.get("THINGSPEAK_READ_API_KEY", "").strip() or None,
             poll_seconds=float(os.environ.get("THINGSPEAK_POLL_SECONDS", "15")),
-            gas_field=os.environ.get("THINGSPEAK_GAS_FIELD", "").strip() or None,
         )
 
 
-def _gas_reading(entry: dict, gas_field: str | None) -> float | None:
-    """Raw gas resistance, or None when absent or non-positive (the uploader
-    sends -1 while the sensor warms up)."""
-    if gas_field is None:
+# All four hardware flags set and iaq_accuracy == 3 (hardware/sketch.cpp).
+_GAS_USABLE_FLAGS = 0x3F
+
+
+def _flags(entry: dict) -> int | None:
+    try:
+        return int(float(entry["field7"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _gas_reading(entry: dict, flags: int | None) -> float | None:
+    """Raw gas resistance, or None when the firmware's usability gate is not met
+    or the value is non-positive (the uploader omits the field while warming up)."""
+    if flags != _GAS_USABLE_FLAGS:
         return None
     try:
-        value = float(entry[gas_field])
+        value = float(entry["field4"])
     except (KeyError, TypeError, ValueError):
         return None
     return value if value > 0.0 else None
 
 
-def _iaq_accuracy(entry: dict) -> int | None:
-    try:
-        value = int(float(entry["field8"]))
-    except (KeyError, TypeError, ValueError):
-        return None
-    return value if 0 <= value <= 3 else None
+def _iaq_accuracy(flags: int | None) -> int | None:
+    return None if flags is None else (flags >> 4) & 0x03
 
 
 def _entry_id(entry: dict) -> int | None:
@@ -78,9 +83,7 @@ def _entry_id(entry: dict) -> int | None:
         return None
 
 
-def parse_feed(
-    feeds: list[dict], gas_field: str | None = None
-) -> list[tuple[int, TelemetrySample]]:
+def parse_feed(feeds: list[dict]) -> list[tuple[int, TelemetrySample]]:
     """Turn ThingSpeak feed entries into (entry_id, sample) pairs.
 
     Entries with a missing or out-of-range temperature or humidity are dropped
@@ -98,6 +101,7 @@ def parse_feed(
             humidity = float(entry["field2"])
         except (KeyError, TypeError, ValueError, AttributeError):
             continue
+        flags = _flags(entry)
         if not 0.0 <= humidity <= 100.0:
             continue
         if not math.isfinite(temperature):
@@ -109,9 +113,9 @@ def parse_feed(
                     timestamp=timestamp.timestamp(),
                     temperature=temperature,
                     humidity=humidity,
-                    gas_resistance=_gas_reading(entry, gas_field),
+                    gas_resistance=_gas_reading(entry, flags),
                     door_open=False,
-                    iaq_accuracy=_iaq_accuracy(entry),
+                    iaq_accuracy=_iaq_accuracy(flags),
                 ),
             )
         )
@@ -192,7 +196,7 @@ class ThingSpeakPoller:
         if not isinstance(body, dict):
             raise ValueError("ThingSpeak rejected the read; check THINGSPEAK_READ_API_KEY")
 
-        history = parse_feed(body.get("feeds") or [], self._config.gas_field)
+        history = parse_feed(body.get("feeds") or [])
         oldest = min((sample.timestamp for _, sample in history), default=None)
         previous = self._store.latest_telemetry
         new_ids = [entry_id for entry_id, _ in history
@@ -214,7 +218,7 @@ class ThingSpeakPoller:
             if (entry_id := _entry_id(entry)) is not None
             and (self.last_entry_id is None or entry_id > self.last_entry_id)
         ]
-        parsed = parse_feed(fresh, self._config.gas_field)
+        parsed = parse_feed(fresh)
         if len(parsed) < len(fresh):
             logger.warning(
                 "ThingSpeak: skipped %d of %d new entries with a missing or invalid "

@@ -10,15 +10,18 @@ from apps.api.service import FreshnessService
 from apps.api.thingspeak import ThingSpeakConfig, ThingSpeakPoller, parse_feed
 
 
-def _entry(entry_id, created_at, temp="22.2", rh="53.7", gas="219884.0"):
+def _entry(entry_id, created_at, temp="22.2", rh="53.7", gas="219884.0", flags="63"):
     return {
         "entry_id": entry_id,
         "created_at": created_at,
         "field1": temp,
         "field2": rh,
         "field3": "10.040",
-        "field7": gas,
-        "field8": "3",
+        "field4": gas,
+        "field5": "9.2985",
+        "field6": "149.09",
+        "field7": flags,
+        "field8": "54575",
     }
 
 
@@ -28,7 +31,6 @@ def test_parse_feed_maps_bme688_fields_and_orders_by_entry():
             _entry(27, "2026-09-19T06:02:26Z", temp="22.172"),
             _entry(26, "2026-09-19T06:02:03Z"),
         ],
-        gas_field="field7",
     )
     assert [entry_id for entry_id, _ in parsed] == [26, 27]
     sample = parsed[1][1]
@@ -47,7 +49,6 @@ def test_parse_feed_drops_missing_and_invalid_readings():
             _entry(2, "2026-09-19T06:00:20Z", rh="140"),
             _entry(4, "2026-09-19T06:01:00Z"),
         ],
-        gas_field="field7",
     )
     assert [entry_id for entry_id, _ in parsed] == [4]
 
@@ -60,20 +61,22 @@ def test_bad_gas_reading_keeps_temperature_and_humidity():
             _entry(162, "2026-09-19T06:49:19Z", gas="0"),
             _entry(163, "2026-09-19T06:49:39Z", gas=None),
         ],
-        gas_field="field7",
     )
     assert [entry_id for entry_id, _ in parsed] == [161, 162, 163]
     assert all(sample.gas_resistance is None for _, sample in parsed)
     assert parsed[0][1].temperature == 22.2
 
 
-def test_gas_is_ignored_unless_a_gas_field_is_configured():
-    [(_, sample)] = parse_feed([_entry(1, "2026-09-19T06:00:00Z")])
+@pytest.mark.parametrize("flags", ["47", "15", "0", None])
+def test_gas_is_ignored_until_the_firmware_flags_say_it_is_usable(flags):
+    # Anything but 63 means a hardware flag is clear or iaq_accuracy is below 3.
+    [(_, sample)] = parse_feed([_entry(1, "2026-09-19T06:00:00Z", flags=flags)])
     assert sample.gas_resistance is None
     assert sample.humidity == 53.7
+    assert sample.iaq_accuracy == (None if flags is None else (int(flags) >> 4) & 3)
 
 
-def _poller(feeds_by_call, service, gas_field="field7"):
+def _poller(feeds_by_call, service):
     calls = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -82,7 +85,7 @@ def _poller(feeds_by_call, service, gas_field="field7"):
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     config = ThingSpeakConfig(
-        channel_id="3499736", read_api_key="KEY", poll_seconds=15, gas_field=gas_field
+        channel_id="3499736", read_api_key="KEY", poll_seconds=15
     )
     return ThingSpeakPoller(config, service.ingest, service.store, client=client,
                            history_callback=service.restore_complete_history), calls
@@ -145,9 +148,7 @@ def test_config_is_off_without_a_channel(monkeypatch):
     monkeypatch.setenv("THINGSPEAK_READ_API_KEY", "")
     config = ThingSpeakConfig.from_env()
     assert config is not None and config.read_api_key is None
-    assert config.gas_field is None
-    monkeypatch.setenv("THINGSPEAK_GAS_FIELD", "field7")
-    assert ThingSpeakConfig.from_env().gas_field == "field7"
+
 
 
 def test_truncated_five_day_history_is_flagged_and_survives_restart(tmp_path):

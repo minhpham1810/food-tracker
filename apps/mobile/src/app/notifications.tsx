@@ -6,6 +6,7 @@ import { AlertsBanner } from '@/components/AlertsBanner';
 import { Card } from '@/components/Card';
 import { ErrorState } from '@/components/ErrorState';
 import { getState } from '@/lib/api';
+import { markAlertsSeen } from '@/lib/seenAlerts';
 import { fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { AppState } from '@/lib/types';
 
@@ -27,7 +28,11 @@ export default function NotificationsScreen() {
 
   const refresh = useCallback(async () => {
     try {
-      setState(await getState());
+      const next = await getState();
+      setState(next);
+      // Read the moment they are on screen, including ones that arrive while
+      // it stays open -- the user is looking straight at them.
+      markAlertsSeen(next.alerts);
       setError(null);
     } catch {
       setError(UNREACHABLE);
@@ -92,5 +97,5 @@ const makeStyles = (colors: ThemeColors) =>
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   muted: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   errorText: { color: colors.danger, fontSize: fontSize.sm, marginBottom: spacing.md },
-  emptyTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  emptyTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
 });

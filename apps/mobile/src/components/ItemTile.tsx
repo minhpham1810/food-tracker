@@ -3,14 +3,21 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { itemPhotoUrl } from '@/lib/api';
-import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
+import {
+  bezel,
+  dividerLabel,
+  fontSize,
+  radius,
+  spacing,
+  useStyles,
+  useTheme,
+  type ThemeColors,
+} from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
 import { estimate } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
-  /** The most urgent item: marked with a status-color border, not a label. */
-  highlighted?: boolean;
 }
 
 /**
@@ -19,22 +26,15 @@ interface Props {
  * the name underneath. No status word and no bar: at this size the color and
  * the figure say the same thing three times over.
  */
-export function ItemTile({ item, highlighted = false }: Props) {
+export function ItemTile({ item }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
   const palette = statusColors[item.status];
   const { value, label } = estimate(item);
 
-  // Link asChild clones its single child, and expo-router rejects a style ARRAY
-  // on that child -- flatten it into one object first.
-  const tileStyle = StyleSheet.flatten([
-    styles.tile,
-    highlighted && { borderColor: palette.bar },
-  ]);
-
   return (
     <Link href={{ pathname: '/items/[id]', params: { id: item.id } }} asChild>
-      <Pressable accessibilityRole="button" style={tileStyle}>
+      <Pressable accessibilityRole="button" style={styles.tile}>
         <View style={[styles.preview, { backgroundColor: palette.wash }]}>
           {item.has_photo === true && (
             <Image
@@ -82,31 +82,35 @@ export function ItemTile({ item, highlighted = false }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+  // The tray.
   tile: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
+    borderRadius: radius.xxl,
+    padding: bezel,
   },
+  // The plate. Concentric with the tray, and it clips its own photo.
   preview: {
     aspectRatio: 1.35,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderRadius: radius.xxl - bezel,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
   },
   numberRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing.xs },
-  number: { fontSize: 40, fontWeight: '800', letterSpacing: -1.5, textAlign: 'center' },
+  number: { fontSize: fontSize.display * 0.75, fontWeight: '600', letterSpacing: -1.6, textAlign: 'center' },
   numberUnit: { color: colors.textMuted, fontSize: fontSize.xs, paddingBottom: 7 },
   opened: {
+    ...dividerLabel,
     position: 'absolute',
     top: spacing.sm,
     left: spacing.md,
     color: colors.textDim,
-    fontSize: fontSize.xs,
   },
-  statusWord: { fontSize: fontSize.sm, fontWeight: '700', textAlign: 'center', paddingHorizontal: spacing.sm },
+  statusWord: { fontSize: fontSize.sm, fontWeight: '600', textAlign: 'center', paddingHorizontal: spacing.sm },
   // Fixed black/white: this sits on the photo, not on a themed surface.
   scrim: {
     position: 'absolute',
@@ -118,8 +122,8 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: spacing.xs,
   },
   scrimRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
-  scrimNumber: { fontSize: fontSize.lg, fontWeight: '800', letterSpacing: -0.4 },
+  scrimNumber: { fontSize: fontSize.lg, fontWeight: '700', letterSpacing: -0.4 },
   scrimUnit: { color: '#FBF5E3', fontSize: fontSize.xs, fontWeight: '600', paddingBottom: 2 },
-  footer: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  name: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  footer: { paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  name: { color: colors.text, fontSize: fontSize.sm, fontWeight: '500', letterSpacing: -0.1 },
 });
