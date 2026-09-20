@@ -1,17 +1,58 @@
 # Freshness Tracker
 
-A food freshness prototype with a Python engine, FastAPI backend, telemetry
-simulator, and Expo mobile app. The app includes an inventory dashboard, telemetry
-and alerts, item details and editing, manual entry, label scanning with editable
-OCR results, and a local-model assistant with typed and voice-transcribed questions.
+A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
+telemetry simulator, an Expo mobile app, and a BME688 sensor sketch that uploads to
+ThingSpeak.
 
 This is a waste-reduction prototype, not a food-safety device. Food-profile
-coefficients are placeholders. Only the temperature track originates remaining
-freshness; gas and color-label signals can only shorten it.
+coefficients in `engine/foods.json` are placeholders.
 
-## Backend setup
+## Current state
 
-Use Python 3.12 or newer. From the repository root:
+| Area | Status |
+| --- | --- |
+| Freshness engine | Working. Temperature (Q10 budget), gas anomaly and color-label tracks, fused. Only the temperature track sets remaining freshness; gas and color can only **shorten** it or veto to 0. |
+| Backend API | Working. Items, telemetry, alerts, OCR, assistant, demo control. **All state is in memory** and is lost on restart; the inventory starts empty. |
+| Live telemetry | Optional. The API polls a ThingSpeak channel when `THINGSPEAK_CHANNEL_ID` is set. The sensor has no door switch, so every live sample counts as door-closed. Gas needs a raw-ohms field (`THINGSPEAK_GAS_FIELD`); without it only the temperature track runs. |
+| Simulator | Working. Synthetic scenarios and Mendeley-style CSV replay, both feeding `service.ingest` directly. |
+| Mobile app | Working on iOS/Android. Fridge dashboard (grid/list), notifications screen, item details (rename, category, mark opened, label score, delete), manual add, multi-photo label scan, voice-capable assistant, light/dark/system theme, splash overlay. No auth, no local persistence. |
+| Label scan (OCR) | Qwen vision model via Ollama by default (up to 5 photos, all fields editable before confirm). Tesseract is an explicit legacy single-photo mode. |
+| Assistant | Local OpenAI-compatible tool-calling model (default Ollama `qwen3.5:9b`). It can only act through validated tools and never produces freshness numbers itself. |
+| Hardware | `hardware/sketch.cpp` (Arduino/BSEC2, WiFi) uploads readings to ThingSpeak every 20 s. CAD in `hardware/STL_files/`. The API reads that channel; the board never talks to the API directly. |
+| Not built | Persistence, authentication, shared-fridge gas semantics, model calibration/validation, automated mobile UI tests. |
+
+## Repository layout
+
+| Path | Responsibility |
+| --- | --- |
+| `engine/` | Pure freshness functions (`burn.py`, `gas.py`, `conditioning.py`, `fusion.py`) and `foods.json` profiles |
+| `apps/api/` | FastAPI app: `main.py` routes, `service.py` logic, `store.py` state, `schemas.py`, `ocr.py` / `vision_ocr.py`, `thingspeak.py`, `llm/` (gateway + tools) |
+| `simulator/` | `scenarios.json`, scenario generator, CSV replay |
+| `apps/mobile/` | Expo SDK 57 app (`src/app` routes, `src/components`, `src/lib`) |
+| `hardware/` | ESP32 sketch, vendored libraries, 3D-print enclosure files |
+| `tests/` | `engine/`, `simulator/`, `api/` pytest suites |
+
+```mermaid
+flowchart LR
+    BOARD[BME688 board] --> TS[ThingSpeak]
+    TS --> POLL[ThingSpeak poller]
+    POLL --> SERVICE
+    SIM[Simulator / CSV replay] --> SERVICE[Freshness service]
+    HTTP[POST /api/telemetry] --> SERVICE
+    SERVICE <--> ENGINE[Temperature / gas / label fusion]
+    SERVICE <--> STORE[In-memory store]
+    APP[Expo app] --> API[FastAPI]
+    API --> SERVICE
+    API --> OCR[Qwen vision OCR<br/>Tesseract legacy]
+    API --> LLM[Model gateway and validated tools]
+    LLM --> SERVICE
+```
+
+## Setup
+
+### Backend
+
+Python 3.12+, from the repo root:
 
 ```sh
 python3 -m venv .venv
@@ -21,86 +62,91 @@ cp .env.example .env
 python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8010 --env-file .env
 ```
 
-On Windows, create the environment with `py -3.14 -m venv .venv` (or another
-installed Python 3.12+), activate it with `.\.venv\Scripts\Activate.ps1`, and use
-`Copy-Item .env.example .env` instead of `cp`.
+API docs: <http://localhost:8010/docs>. On Windows, activate with
+`.\.venv\Scripts\Activate.ps1` and use `Copy-Item` instead of `cp`.
 
-The API documentation is at <http://localhost:8010/docs>. Inventory and telemetry
-are held in memory and reset when the server restarts.
+Key `.env` values (see `.env.example` for all):
 
-Label scanning uses the local `qwen3.5:9b` model as a structured vision extractor.
-A scan can combine up to five photos of the same package, so the front label, date
-stamp, size, and lot code can be captured from different views. Qwen transcribes the
-photos together, returns only fields grounded in that transcription, and leaves every
-field editable before an item is created. PNG/JPEG and HEIC photos are supported.
-Configure the model with the `OCR_*` values in the root `.env`.
+| Variable | Purpose |
+| --- | --- |
+| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Assistant model server (legacy `OMLX_*` names still work as fallbacks) |
+| `OCR_ENGINE`, `OCR_BASE_URL`, `OCR_MODEL`, `OCR_TIMEOUT_SECONDS`, `OCR_KEEP_ALIVE` | Label scanning (`qwen` or `tesseract`) |
+| `THINGSPEAK_CHANNEL_ID`, `THINGSPEAK_READ_API_KEY`, `THINGSPEAK_POLL_SECONDS`, `THINGSPEAK_GAS_FIELD` | Optional live telemetry; leave the channel blank to disable |
+| `FRESHNESS_DATA_DIR` | Where CSV replay files live (default `./data`) |
 
-Qwen failures are returned to the app instead of silently switching OCR engines.
-`OCR_ENGINE=tesseract` remains an explicit legacy single-photo mode for development
-and deterministic OCR tests; it requires the **Tesseract executable** on PATH.
+`apps/api/config.py` loads the root `.env` on import; real environment variables win.
 
-The assistant needs a separately running OpenAI-compatible model server. The
-default configuration uses [Ollama](https://ollama.com) on port **11434** with
-the tool-capable `qwen3.5:9b` model:
+### Model server (assistant and scanning)
+
+Both use [Ollama](https://ollama.com) by default:
 
 ```sh
 ollama pull qwen3.5:9b
-ollama show qwen3.5:9b
+ollama show qwen3.5:9b     # must list "tools" under capabilities
 ```
 
-The `ollama show` output must list `tools` under capabilities. Start Ollama before
-using the assistant; the Freshness API continues to use port **8010**. The backend
-automatically loads `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` from the root
-`.env`. Shell environment variables take precedence. Compatible servers such as
-LM Studio and oMLX can be selected by changing those values; the legacy `OMLX_*`
-names remain supported as fallbacks. Other API features work without a model
-server.
+Start Ollama before using the assistant or Scan tab. Everything else works without it.
+Qwen failures are returned to the app; they do not silently fall back to Tesseract.
+`OCR_ENGINE=tesseract` needs the `tesseract` binary (`brew install tesseract`).
 
-## Mobile setup
+### Mobile
 
-Use Node.js 22.13 or newer, as required by [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/).
-In another terminal:
+Node 22.13+:
 
 ```sh
 cd apps/mobile
 npm ci
 cp .env.example .env
-# Edit EXPO_PUBLIC_API_BASE_URL before starting Expo.
 npx expo start
 ```
 
-For a physical phone, set `EXPO_PUBLIC_API_BASE_URL` to
-`http://YOUR_LAPTOP_LAN_IP:8010/api`. Find the laptop's address with
-`ipconfig getifaddr en0` on macOS or `ipconfig` on Windows. The phone and laptop
-must share a network that permits device-to-device traffic. `localhost` on a
-phone refers to the phone, not the laptop. Allow the backend through the laptop's
-firewall and restart Expo after changing the environment file.
+Set `EXPO_PUBLIC_API_BASE_URL=http://<laptop LAN IP>:8010/api` in `apps/mobile/.env`
+(`ipconfig getifaddr en0` on macOS). `localhost` on a phone is the phone. Restart
+Expo after changing it.
 
-Open the app using an Expo Go version compatible with SDK 57 or a development
-build. See the [mobile guide](apps/mobile/README.md) for verification and known
-platform limitations. Voice input uses a native speech-recognition module, so it
-requires a rebuilt development or release app rather than Expo Go.
+Voice input uses a native speech module, so it needs a development or release
+build, not Expo Go.
 
-## Demo and dataset replay
+### Standalone iOS build on a physical iPhone
 
-The API starts with demo inventory. Start a synthetic scenario:
+Needs full Xcode, an Apple ID under Xcode Settings → Accounts, and Developer Mode on
+the phone.
+
+```sh
+cd apps/mobile
+npm run ios                        # Release build + install (scripts/ios-device.sh)
+IOS_DEVICE=<udid> npm run ios      # another phone: xcrun devicectl list devices
+npx expo prebuild --platform ios   # only after app.json or native-dependency changes
+(cd ios && pod install)
+```
+
+- Do **not** use `npx expo run:ios`: it forces parallel codesigning, which fails here
+  with `errSecInternalComponent` and yields an app that builds but won't install.
+  `scripts/ios-device.sh` signs serially and verifies every framework.
+- `ios/` is generated and gitignored. Edit `app.json`, never the Xcode project.
+  Signing lives in `ios.appleTeamId`; `plugins/with-script-sandbox-disabled.js`
+  reapplies the setting the Metro bundling phase needs on each prebuild.
+- Release embeds the JS bundle, so no Metro is needed, but the backend must be
+  reachable at `EXPO_PUBLIC_API_BASE_URL`. Free Apple ID signing expires after 7 days.
+- If `app.json` icons/logo change, rerun `python scripts/build-icons.py`.
+
+## Demo and replay
+
+Demo control is API-only:
 
 ```sh
 curl -X POST http://127.0.0.1:8010/api/demo/scenarios/hot_car/start
 curl http://127.0.0.1:8010/api/state
-```
-
-Available scenarios: `normal`, `hot_car`, `door_open`, `spoilage`, `contradiction`,
-and `past_budget_quiet`. The dashboard displays telemetry and item estimates;
-scenario controls are API-only.
-
-```sh
 curl -X POST http://127.0.0.1:8010/api/demo/stop
 curl -X POST http://127.0.0.1:8010/api/demo/reset
 ```
 
-Reset replaces inventory and telemetry with demo state. For CSV replay, put a
-compatible file under `FRESHNESS_DATA_DIR` (default `./data`), then run:
+Scenarios: `normal`, `hot_car`, `door_open`, `spoilage`, `contradiction`,
+`past_budget_quiet`. Reset clears telemetry, alerts and the gas baseline and
+restores every existing item's freshness budget; it does not add or remove items.
+
+CSV replay (file under `FRESHNESS_DATA_DIR`, columns `Minute`, `Temperature`,
+`Humidity` and an `MQ*` column):
 
 ```sh
 curl -X POST http://127.0.0.1:8010/api/demo/replay \
@@ -108,58 +154,64 @@ curl -X POST http://127.0.0.1:8010/api/demo/replay \
   -d '{"path":"beef.csv","sensor_column":"MQ135"}'
 ```
 
-The adapter requires `Minute`, `Temperature`, `Humidity`, and the selected `MQ*`
-column. Replay replaces demo state. Dataset files are not distributed here.
-Replay exercises the pipeline; it does not validate BME680 performance or train
-a model. Check dataset units before interpreting replayed gas values.
+Datasets are not distributed. Replay exercises the pipeline; it does not validate
+BME680/688 performance. Check units before interpreting replayed gas values.
 
-## Verification
+## Development guide
+
+### Verify
 
 ```sh
-# Repository root, with the Python environment activated
-python -m pytest -q
-
-# Mobile directory
-cd apps/mobile
-npx tsc --noEmit
-npx expo export --platform all
+python -m pytest -q                                   # backend, from repo root
+python -m pytest tests/engine/test_fusion.py -q       # one file
+cd apps/mobile && npx tsc --noEmit                    # types
+cd apps/mobile && npx expo export --platform all      # bundling check, not a device test
 ```
 
-Python tests cover engine behavior, simulation/replay, inventory actions, API
-validation, real OCR, and mocked model-server responses. Export verifies bundling;
-physical camera permissions, uploads, and native navigation need device testing.
+Tests run real Tesseract on rendered label images (needs the binary). LLM tests
+monkeypatch `LLMGateway._chat`, so no model server is needed. Tests that need
+isolated state monkeypatch `main.service` and `main.simulator` (see
+`tests/api/test_replay_api.py`); otherwise they share the global singleton.
 
-## Project layout and architecture
+### Rules to keep
 
-| Directory | Responsibility |
-| --- | --- |
-| `engine/` | Temperature-time calculations, gas baseline, signal fusion, food profiles |
-| `simulator/` | Synthetic scenarios and CSV replay |
-| `apps/api/` | HTTP routes, in-memory service, OCR, assistant tools |
-| `apps/mobile/` | Expo routes, shared components, API client |
-| `hardware code/` | CircuitPython sensor readout prototype and bundled libraries |
-| `tests/` | Python engine, simulator, and API tests |
-| `docs/` | Architecture, team handoff, and demo guide |
+- **Engine invariant:** tracks B and C may only shorten Track A's days or veto to 0.
+  `engine/` stays pure (no I/O beyond loading `foods.json`).
+- **Alerts** are recomputed from scratch by `_refresh_alerts()`. Any service
+  mutation that affects freshness must call it.
+- **All telemetry goes through `service.ingest`** (HTTP, simulator, replay,
+  ThingSpeak poller).
+- **Routes stay thin:** `KeyError` → 404, `ValueError` → 400; validation lives in
+  `schemas.py`.
+- **Assistant:** the model never produces freshness numbers. To add a tool, add an
+  entry to `TOOL_SCHEMAS` and a matching `_tool_<name>` in `apps/api/llm/tools.py`.
+- **OCR contract:** scan → user edits → `/api/ocr/confirm`. Parsing can change
+  without changing that contract. Scan stores a 512 px thumbnail keyed by `scan_id`.
+- **Mobile:** all backend calls go through `src/lib/api.ts` (12 s timeout; scans have
+  their own longer deadline). `src/lib/types.ts` mirrors backend schemas by hand,
+  so change both together. Food categories come from `GET /api/profiles`; never
+  hardcode them. Styles use `useStyles(makeStyles)` from `src/lib/theme.tsx`;
+  colors can't be read at module scope.
+- Read the [Expo SDK 57 docs](https://docs.expo.dev/versions/v57.0.0/) before
+  changing SDK integrations.
 
-```mermaid
-flowchart LR
-    SIM[Simulator / CSV replay] --> SERVICE[Freshness service]
-    HTTP[POST /api/telemetry] --> SERVICE
-    SERVICE <--> ENGINE[Temperature / gas / label fusion]
-    SERVICE <--> STORE[In-memory store]
-    APP[Expo app] --> API[FastAPI]
-    API --> SERVICE
-    API --> OCR[Qwen vision OCR<br/>Tesseract fallback]
-    API --> LLM[Model gateway and validated tools]
-    LLM --> SERVICE
-```
+### Common tasks
 
-The simulator calls the same service ingestion method as the telemetry endpoint;
-it does not make HTTP requests. The hardware prototype currently prints sensor
-readings every two seconds. It does **not** upload telemetry or connect to the app.
-Hardware ingestion, persistence, shared-fridge gas semantics, and model calibration
-remain future work.
+- **Add a food profile:** edit `engine/foods.json`; the app picks it up via `/api/profiles`.
+- **Change an API shape:** update `apps/api/schemas.py`, the route, `apps/mobile/src/lib/types.ts`
+  and `api.ts`, and add a test under `tests/api/`.
+- **Add a scenario:** add it to `simulator/scenarios.json` and `scenarios.py`, with a test in
+  `tests/simulator/`.
 
-See the [architecture guide](docs/architecture.md),
-[team handoff](docs/freshness-tracker-team-plan.md), and
-[digital demo guide](docs/digital-prototype-plan.md).
+### Hardware
+
+`hardware/sketch.cpp` reads a BME688 through BSEC2 and posts to ThingSpeak every
+20 s after a ~5 minute calibration. Set the WiFi SSID and write key in the sketch
+constants for your own channel; keep real keys out of git. `hardware/lib/` holds
+vendored libraries; don't edit them.
+
+## Known limitations
+
+No persistence or auth; placeholder coefficients; no shared-fridge gas semantics;
+no automated mobile interaction tests; web preview lacks OCR upload and item
+deletion.
