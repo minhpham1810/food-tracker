@@ -1,18 +1,41 @@
-.worktrees/
-.superpowers/sdd/
+# Python
 .venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
-.env
+.mypy_cache/
+.coverage
+coverage/
+htmlcov/
+
+# pytest --basetemp runs
+.pytest-*/
+
+# Node / Expo
 node_modules/
 dist/
-coverage/
-.coverage
-htmlcov/
-.DS_Store
+.expo/
+web-build/
+*.tsbuildinfo
+
+# Secrets and local config (keep *.env.example)
+.env
+.env.*
+!.env.example
+!*.env.example
+
+# Generated / runtime
 data/*.csv
+data/*.sqlite3
 *.log
+.worktrees/
+.superpowers/sdd/
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp
+
 CLAUDE.md

@@ -16,11 +16,15 @@ cd "$(dirname "$0")/.."
 DEVICE="${IOS_DEVICE:-00008130-000E683638C1401C}"
 APP=ios/build/Build/Products/Release-iphoneos/FreshnessTracker.app
 
+# -destination-timeout: xcodebuild gives up enumerating devices after 30s, and
+# the wired CoreDevice tunnel to the phone often takes longer -- it then fails
+# with "Unable to find a destination" while devicectl lists the phone connected.
 xcodebuild \
   -workspace ios/FreshnessTracker.xcworkspace \
   -scheme FreshnessTracker \
   -configuration Release \
   -destination "id=$DEVICE" \
+  -destination-timeout 120 \
   -derivedDataPath ios/build \
   -allowProvisioningUpdates \
   COCOAPODS_PARALLEL_CODE_SIGN=false \
