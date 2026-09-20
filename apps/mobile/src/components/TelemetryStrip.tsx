@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card } from './Card';
 import { formatTemperature, useSettings, type TemperatureUnit } from '@/lib/settings';
 import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
+import { AGING_RATE_EMPHASIS } from '@/lib/estimate';
 import type { TelemetryState } from '@/lib/types';
 
 const UNAVAILABLE = 'Unavailable';
@@ -18,13 +19,24 @@ interface Cell {
   alarm?: boolean;
 }
 
-function buildCells(t: TelemetryState, temperatureUnit: TemperatureUnit): Cell[] {
+function buildCells(
+  t: TelemetryState,
+  temperatureUnit: TemperatureUnit,
+  disconnected: boolean,
+): Cell[] {
+  // Without a live reading there is no current rate to state.
+  const rate = disconnected ? null : t.aging_rate;
   return [
     {
       label: 'Temperature',
       value:
         t.temperature == null ? UNAVAILABLE : formatTemperature(t.temperature, temperatureUnit),
       alarm: t.temperature != null && t.temperature > WARM_FRIDGE_C,
+    },
+    {
+      label: 'Aging rate now',
+      value: rate == null ? UNAVAILABLE : `${rate.toFixed(1)}x`,
+      alarm: rate != null && rate >= AGING_RATE_EMPHASIS,
     },
     {
       label: 'Humidity',
@@ -73,7 +85,7 @@ export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
         </Text>
       </View>
       <View style={styles.grid}>
-        {buildCells(telemetry, temperatureUnit).map((cell) => (
+        {buildCells(telemetry, temperatureUnit, disconnected).map((cell) => (
           <View key={cell.label} style={styles.cell}>
             <Text style={styles.cellLabel}>{cell.label}</Text>
             <Text style={[styles.cellValue, cell.alarm && styles.cellValueAlarm]}>

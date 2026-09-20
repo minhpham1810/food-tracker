@@ -30,6 +30,8 @@ export interface ItemState {
   q10_source: string;
   projection_temperature_c: number;
   estimate_message: string | null;
+  /** Current aging speed vs 4C. null = no usable reading; never render as 1.0x. */
+  aging_rate: number | null;
   fusion_uncertainty: {
     used_for_estimate: boolean;
     sigma_a: number;
@@ -65,6 +67,9 @@ export interface TelemetryState {
   gas_resistance: number | null;
   /** null means "no baseline yet" -- never render this as evidence of freshness. */
   gas_anomaly: number | null;
+  /** Fridge-level aging speed vs 4C. null = no usable reading. */
+  aging_rate: number | null;
+  aging_rate_reference_q10: number;
 }
 
 export interface Alert {

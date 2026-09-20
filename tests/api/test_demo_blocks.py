@@ -10,6 +10,7 @@ def sample(ts, temp=4):
 
 def test_backward_and_duplicate_samples_are_dropped(caplog):
     service = FreshnessService()
+    service.add_item("dairy")
     service.ingest(sample(80))
     before = service.ingest(sample(100)).items[0].t_eff
     with caplog.at_level(logging.WARNING):
@@ -36,10 +37,13 @@ def test_stale_reading_age(monkeypatch):
 def test_outside_model_stops_integration_and_persists_warning(tmp_path, temperature):
     path = str(tmp_path / 'range.sqlite3')
     service = FreshnessService(storage_path=path)
+    service.add_item("dairy")
     service.ingest(sample(0))
     state = service.ingest(sample(60, temperature))
+    assert state.items, "no item to assert on: all() would pass vacuously"
     assert all(i.t_eff == 0 and i.outside_model_range and i.confidence == 'low' for i in state.items)
     restarted = FreshnessService(storage_path=path)
+    assert restarted.snapshot().items
     assert all(i.model_message == 'outside modelled range' for i in restarted.snapshot().items)
 
 
@@ -52,9 +56,12 @@ def test_buffer_covers_24_hours_at_20_second_cadence():
 
 def test_gas_is_fridge_level_only_and_calibration_is_unused(monkeypatch):
     service = FreshnessService(experimental_fusion=False)
+    service.add_item("dairy")
+    service.ingest(sample(0))
     monkeypatch.setattr(service, '_latest_gas_anomaly', lambda: 1.0)
     state = service.snapshot()
     assert state.telemetry.gas_anomaly == 1.0
+    assert state.items, "no item to assert on: the loop would pass vacuously"
     for item in state.items:
         assert item.days_left == item.track_a_days_left
         assert item.days_left > 0

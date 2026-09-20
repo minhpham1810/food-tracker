@@ -17,6 +17,24 @@ def rate_multiplier(T: float, Q10: float, T_ref: float = 4.0) -> float:
     return Q10 ** ((T - T_ref) / 10.0)
 
 
+# Q10 used for the fridge-level aging-rate display, which is not tied to any
+# one item. Matches the fitted value shared by the poultry/red_meat/seafood/
+# dairy profiles; see "Profile provenance" in the README.
+AGING_RATE_REFERENCE_Q10 = 2.7
+
+
+def current_aging_rate(T: float | None, Q10: float) -> float | None:
+    """Rate multiplier for display, or None when it cannot be stated.
+
+    Unlike rate_multiplier this never raises: a missing reading or a
+    temperature outside the modelled range yields None so callers render
+    "unavailable" rather than an invented 1.0x.
+    """
+    if T is None or Q10 <= 0 or not in_model_range(T):
+        return None
+    return rate_multiplier(T, Q10)
+
+
 def update_budget(t_eff: float, T: float, dt_hours: float, Q10: float) -> float:
     if t_eff < 0 or dt_hours < 0:
         raise ValueError("t_eff and dt_hours must be non-negative")
