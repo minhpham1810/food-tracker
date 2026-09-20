@@ -6,7 +6,7 @@ import { FreshnessBar } from './FreshnessBar';
 import { itemPhotoUrl } from '@/lib/api';
 import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
-import { estimate, statusLabel } from '@/lib/estimate';
+import { estimate } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
@@ -14,29 +14,15 @@ interface Props {
   highlighted?: boolean;
 }
 
-/** Secondary line shared by the list row and the grid tile. */
-export function itemMeta(item: ItemState): string | null {
-  const parts = [item.brand, item.opened ? 'Opened' : null].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
-
-/** Sentence-case status word for the meta line and tile badge, e.g. "Fresh". */
-export function statusWord(status: ItemState['status']): string {
-  const label = statusLabel[status];
-  return label.charAt(0) + label.slice(1).toLowerCase();
-}
-
 /**
- * List-view row for a fridge item, laid out like a Google Drive
- * file row: leading badge (the label photo when the item was scanned, otherwise
- * its initial), name + meta, trailing number. Detail and actions
- * live one tap away rather than repeating per row.
+ * List-view row for a fridge item: leading badge (the label photo when the item
+ * was scanned, otherwise its initial), name, trailing number. The status word is
+ * deliberately absent -- the color already says it, and detail lives one tap away.
  */
 export function ItemRow({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
   const palette = statusColors[item.status];
-  const meta = itemMeta(item);
   const { value, label } = estimate(item);
 
   return (
@@ -73,10 +59,7 @@ export function ItemRow({ item, highlighted = false }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            <Text style={{ color: palette.fg }}>{statusWord(item.status)}</Text>
-            {meta !== null ? ` · ${meta}` : ''}
-          </Text>
+          {item.opened && <Text style={styles.meta}>Opened</Text>}
           {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
         </View>
 

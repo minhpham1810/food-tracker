@@ -19,9 +19,9 @@ import type {
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Chip } from '@/components/Chip';
 import { sendAssistantMessage } from '@/lib/api';
 import {
-  eyebrow,
   fontSize,
   radius,
   spacing,
@@ -239,30 +239,24 @@ export default function AssistantScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.header}>
-            {offline ? (
+            {offline && (
               <Card style={styles.noticeCard}>
                 <Text style={styles.noticeTitle}>Assistant is offline</Text>
                 <Text style={styles.noticeBody}>
-                  This tab needs Ollama or another OpenAI-compatible model server (set
-                  {' '}<Text style={styles.code}>LLM_BASE_URL</Text> before starting the API).
-                  Everything else in the app — freshness tracking, scanning, alerts — works
+                  Start the local model server, then ask again. Everything else in the app works
                   without it.
                 </Text>
               </Card>
-            ) : (
-              <Text style={styles.hint}>
-                Runs against a local model with controlled tool calls — it can read fridge state
-                and request actions like marking an item opened, but it never writes freshness
-                numbers itself.
-              </Text>
             )}
             {exchanges.length === 0 && !offline && (
               <View style={styles.examples}>
-                <Text style={styles.examplesLabel}>TRY ASKING</Text>
                 {EXAMPLES.map((example) => (
-                  <Text key={example} style={styles.exampleText}>
-                    · {example}
-                  </Text>
+                  <Chip
+                    key={example}
+                    label={example}
+                    selected={false}
+                    onPress={() => setMessage(example)}
+                  />
                 ))}
               </View>
             )}
@@ -350,14 +344,11 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { gap: spacing.md, marginBottom: spacing.md },
-  hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   noticeCard: { borderColor: colors.warningBorder, backgroundColor: colors.warningBg },
   noticeTitle: { color: colors.warning, fontSize: fontSize.md, fontWeight: '700' },
   noticeBody: { color: colors.warning, fontSize: fontSize.sm, lineHeight: 18 },
-  code: { color: colors.codeText, fontWeight: '700' },
-  examples: { gap: spacing.xs },
-  examplesLabel: { ...eyebrow, color: colors.textDim },
-  exampleText: { color: colors.textMuted, fontSize: fontSize.sm },
+  // Tappable examples: an empty screen should hand you something to do.
+  examples: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   list: { padding: spacing.lg, gap: spacing.md },
   exchange: { padding: spacing.md, marginBottom: spacing.xs },
   question: { color: colors.accentText, fontWeight: '700' },

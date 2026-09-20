@@ -8,12 +8,12 @@ export interface Estimate {
   label: string;
 }
 
-/** Short form of the fused status -- the hero eyebrow on the detail screen. */
+/** Short form of the fused status -- the headline on the detail screen. */
 export const statusLabel: Record<ItemState['status'], string> = {
-  fresh: 'FRESH',
-  check_early: 'CHECK EARLY',
-  past_budget_quiet: 'PAST BUDGET',
-  discard_quality_signal: 'DISCARD',
+  fresh: 'Fresh',
+  check_early: 'Check early',
+  past_budget_quiet: 'Past budget',
+  discard_quality_signal: 'Discard',
 };
 
 export function estimate(item: ItemState): Estimate {
@@ -31,23 +31,17 @@ export function dayBudget(days: number): Estimate {
 
 export function dayBudgetText(days: number): string {
   if (days <= 0) return 'Past budget';
-  if (days < 1) return 'less than 1 day';
+  if (days < 1) return 'Less than 1 day';
   // Round down so display rounding never adds available time.
   const whole = Math.floor(days);
   return `About ${whole} ${whole === 1 ? 'day' : 'days'}`;
 }
 
-/** Above this the fridge is warm enough that the rate deserves emphasis. */
-export const AGING_RATE_EMPHASIS = 1.5;
-
 /**
- * Current conditions only. This describes how fast the fridge is burning
- * shelf life right now, not the state of the food.
+ * Above this the fridge is warm enough to say so. It is a property of the
+ * fridge, not of any one item, so it is stated once on the fridge screen.
  */
-export function agingRateText(rate: number | null): string {
-  if (rate === null) return 'Aging rate unavailable';
-  return `Aging ${rate.toFixed(1)}x normal speed`;
-}
+export const AGING_RATE_EMPHASIS = 1.5;
 
 /**
  * Below this the 4C headline is close enough that a correction would be noise.

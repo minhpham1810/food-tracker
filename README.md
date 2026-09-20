@@ -7,7 +7,9 @@ ThingSpeak.
 This is an experimental waste-reduction prototype. Five profiles use USDA FSIS
 storage guidance; four remain placeholders. Days left use recorded temperature exposure and
 project future storage at 4C. Display rounds down to whole days or less than one
-day. Gas is an experimental fridge-level signal with no influence on estimates.
+day. A warm fridge also gets a current-conditions correction and an aging-rate
+readout, both prospective what-ifs that never undo accrued exposure. Gas is an
+experimental fridge-level signal with no influence on estimates.
 
 Run only one API worker for one household. There is no account isolation or
 authentication. Do not deploy multiple processes against the same SQLite file:
@@ -19,10 +21,10 @@ Keep the demo on a trusted local network. This limit is documented, not fixed.
 | Area | Status |
 | --- | --- |
 | Freshness engine | Working. Temperature (Q10 budget), gas anomaly and color-label tracks, fused. Only the temperature track sets remaining freshness; gas and color can only **shorten** it or veto to 0. |
-| Backend API | Working. Items, telemetry, alerts, OCR, assistant, demo control. **All state is in memory** and is lost on restart; the inventory starts empty. |
+| Backend API | Working. Items, telemetry, alerts, OCR, assistant, demo control. **All state is in memory** unless `FRESHNESS_DB_PATH` is set. Nothing is seeded: live and demo inventories both start empty. |
 | Live telemetry | Optional. The API polls a ThingSpeak channel when `THINGSPEAK_CHANNEL_ID` is set. The sensor has no door switch, so every live sample counts as door-closed. Gas needs a raw-ohms field (`THINGSPEAK_GAS_FIELD`); without it only the temperature track runs. |
 | Simulator | Working. Synthetic scenarios and Mendeley-style CSV replay, both feeding `service.ingest` directly. |
-| Mobile app | Working on iOS/Android. Fridge dashboard (grid/list), notifications screen, item details (rename, category, mark opened, label score, delete), manual add, multi-photo label scan, voice-capable assistant, persistent Celsius/Fahrenheit and theme settings, in-app user manual, splash overlay. No auth or durable inventory; the API owns inventory state. |
+| Mobile app | Working on iOS/Android. Fridge dashboard (grid/list), notifications screen, item details (rename, category, mark opened, label score, delete, aging rate, current-conditions correction, storage-temperature suggestion), manual add, multi-photo label scan, voice-capable assistant, persistent Celsius/Fahrenheit and theme settings, in-app user manual, splash overlay. No auth or durable inventory; the API owns inventory state. |
 | Label scan (OCR) | Qwen vision model via Ollama by default (up to 5 photos, all fields editable before confirm). Tesseract is an explicit legacy single-photo mode. |
 | Assistant | Local OpenAI-compatible tool-calling model (default Ollama `qwen3.5:9b`). It can only act through validated tools and never produces freshness numbers itself. |
 | Hardware | `hardware/sketch.cpp` (Arduino/BSEC2, WiFi) uploads readings to ThingSpeak every 20 s. CAD in `hardware/STL_files/`. The API reads that channel; the board never talks to the API directly. |
@@ -199,7 +201,8 @@ npx expo prebuild --platform ios   # only after app.json or native-dependency ch
 
 ## Demo and replay
 
-The isolated demo service starts with sample inventory. Demo control is API-only:
+The demo service is isolated from live state and also starts empty — add items
+through the API or the app before starting a scenario. Demo control is API-only:
 
 ```sh
 curl -X POST http://127.0.0.1:8010/api/demo/scenarios/hot_car/start
@@ -247,6 +250,12 @@ isolated state monkeypatch `main.service` and `main.simulator` (see
 
 - **Engine invariant:** tracks B and C may only shorten Track A's days or veto to 0.
   `engine/` stays pure (no I/O beyond loading `foods.json`).
+- **Aging rate and storage optimization** are Track A only: `current_aging_rate`
+  (`engine/burn.py`) and `FreshnessService._storage_optimization` compare the
+  current reading against the 4C reference. They are prospective what-ifs and
+  never undo accrued exposure. Both yield `None` / `temperature_action:
+  "unavailable"` when the reading is missing, stale or outside the modelled
+  range — never a fabricated 1.0x.
 - **Alerts** are recomputed from scratch by `_refresh_alerts()`. Any service
   mutation that affects freshness must call it.
 - **All telemetry goes through `service.ingest`** (HTTP, simulator, replay,

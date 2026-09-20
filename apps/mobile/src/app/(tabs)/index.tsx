@@ -18,7 +18,7 @@ import { NotificationsBell } from '@/components/NotificationsBell';
 import { TelemetryStrip } from '@/components/TelemetryStrip';
 import { ViewModeToggle, type ViewMode } from '@/components/ViewModeToggle';
 import { getState } from '@/lib/api';
-import { eyebrow, fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
+import { fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { AppState } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -76,7 +76,6 @@ export default function FridgeScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading fridge…</Text>
       </View>
     );
   }
@@ -105,22 +104,14 @@ export default function FridgeScreen() {
         }
         ListHeaderComponent={
           <View>
-            {error !== null && (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
+            {error !== null && <Text style={styles.errorText}>{error}</Text>}
             <TelemetryStrip
               telemetry={state.telemetry}
               paused={state.telemetry_paused}
               scenario={state.active_scenario}
             />
             {items.length > 0 && (
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitle}>
-                  <Text style={styles.sectionLabel}>IN YOUR FRIDGE</Text>
-                  <Text style={styles.sectionCount}>{items.length}</Text>
-                </View>
+              <View style={styles.headerRow}>
                 <ViewModeToggle mode={viewMode} onChange={setViewMode} />
               </View>
             )}
@@ -138,9 +129,7 @@ export default function FridgeScreen() {
         ListEmptyComponent={
           <Card style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Nothing in the fridge yet</Text>
-            <Text style={styles.muted}>
-              Scan a product label, or add an item by hand if there is nothing to scan.
-            </Text>
+            <Text style={styles.muted}>Scan a label, or add an item by hand.</Text>
             <Link href="/scan" asChild>
               {/* Link asChild injects the real navigation onPress via prop
                   composition; Button requires one, so this is a no-op. */}
@@ -159,33 +148,11 @@ export default function FridgeScreen() {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bg,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   muted: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
-  errorBanner: {
-    backgroundColor: colors.dangerBg,
-    borderColor: colors.dangerBorder,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: 12,
-  },
-  errorText: { color: colors.danger, fontSize: fontSize.sm },
+  errorText: { color: colors.danger, fontSize: fontSize.sm, marginBottom: spacing.sm },
   list: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  sectionLabel: { ...eyebrow, color: colors.textDim },
-  sectionCount: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm },
   // Each cell is exactly half the row, so a lone last tile doesn't stretch to full
   // width; the negative margin cancels the cells' outer padding at the list edges.
   gridRow: { marginHorizontal: -spacing.xs - 2 },

@@ -6,7 +6,7 @@ import { AlertsBanner } from '@/components/AlertsBanner';
 import { Card } from '@/components/Card';
 import { ErrorState } from '@/components/ErrorState';
 import { getState } from '@/lib/api';
-import { eyebrow, fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
+import { fontSize, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { AppState } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -56,7 +56,6 @@ export default function NotificationsScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading notifications…</Text>
       </View>
     );
   }
@@ -72,22 +71,14 @@ export default function NotificationsScreen() {
           tintColor={colors.textMuted}
         />
       }>
-      {error !== null && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
+      {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLabel}>ALERTS</Text>
-        <Text style={styles.sectionCount}>{state.alerts.length}</Text>
-      </View>
       {state.alerts.length > 0 ? (
         <AlertsBanner alerts={state.alerts} />
       ) : (
         <Card>
           <Text style={styles.emptyTitle}>All clear</Text>
-          <Text style={styles.muted}>No fridge or food alerts right now.</Text>
+          <Text style={styles.muted}>Nothing needs your attention.</Text>
         </Card>
       )}
     </ScrollView>
@@ -98,30 +89,8 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bg,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   muted: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
-  errorBanner: {
-    backgroundColor: colors.dangerBg,
-    borderColor: colors.dangerBorder,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: 12,
-  },
-  errorText: { color: colors.danger, fontSize: fontSize.sm },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  sectionLabel: { ...eyebrow, color: colors.textDim },
-  sectionCount: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '700' },
+  errorText: { color: colors.danger, fontSize: fontSize.sm, marginBottom: spacing.md },
   emptyTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
 });

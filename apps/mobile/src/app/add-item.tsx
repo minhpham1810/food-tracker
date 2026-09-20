@@ -46,14 +46,10 @@ export default function AddItemScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.hint}>
-        Add an item by hand when there is no label to scan, or when OCR can&apos;t read one.
-      </Text>
-
       {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
       <Card>
-        <Text style={styles.fieldLabel}>Food category</Text>
+        <Text style={styles.fieldLabel}>Category</Text>
         <View style={styles.chipRow}>
           {profiles.map((profile) => (
             <Chip
@@ -67,10 +63,9 @@ export default function AddItemScreen() {
 
         {selected !== null && (
           <Text style={styles.footnote}>
-            {selected.name} starts with a {selected.d0_days}-day budget at{' '}
-            {formatTemperature(4, temperatureUnit)}
-            {' '}({selected.opened_d0_days} days once opened), Q10 {selected.q10}.
-            {selected.placeholder ? ' These are demo coefficients, not validated data.' : ''}
+            About {selected.d0_days} days at {formatTemperature(4, temperatureUnit)}, or{' '}
+            {selected.opened_d0_days} once opened.
+            {selected.placeholder ? ' Demo figures, not validated data.' : ''}
           </Text>
         )}
 
@@ -95,7 +90,6 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.md },
-  hint: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   errorText: { color: colors.danger, fontSize: fontSize.sm },
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

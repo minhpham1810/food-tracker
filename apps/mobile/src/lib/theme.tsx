@@ -194,35 +194,28 @@ export const fontSize = {
   xl: 22,
 } as const;
 
-/** Uppercase section labels ("EAT FIRST", "TRACK AGREEMENT"). */
-export const eyebrow = {
-  fontSize: fontSize.xs,
-  fontWeight: '700' as const,
-  letterSpacing: 1.2,
+/** Sentence-case section heading. Quiet: the content is the loud part. */
+export const sectionTitle = {
+  fontSize: fontSize.sm,
+  fontWeight: '600' as const,
+  letterSpacing: -0.1,
 };
 
 /**
- * Depth. RN needs per-platform props: iOS uses shadow*, Android uses elevation,
- * and web maps the shadow props through react-native-web.
- *
- * Opacity is shared by both schemes: a black shadow on the near-black dark
- * background is invisible at any of these values, so it is tuned for light.
+ * Depth, for the one element that is genuinely raised: the add button floating
+ * out of the tab bar. Cards and tiles sit flat on the background and are
+ * separated by a hairline border instead -- a shadow under every surface reads
+ * as chrome, not as hierarchy.
  */
-const iosShadow = (opacity: number, radius: number, height: number): ViewStyle => ({
-  shadowColor: '#000',
-  shadowOpacity: opacity,
-  shadowRadius: radius,
-  shadowOffset: { width: 0, height },
-});
-
-export const shadows: { card: ViewStyle; hero: ViewStyle } = {
-  card: Platform.select({
-    android: { elevation: 3 },
-    default: iosShadow(0.12, 10, 4),
-  }) as ViewStyle,
+export const shadows: { hero: ViewStyle } = {
   hero: Platform.select({
     android: { elevation: 8 },
-    default: iosShadow(0.18, 20, 8),
+    default: {
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+    },
   }) as ViewStyle,
 };
 

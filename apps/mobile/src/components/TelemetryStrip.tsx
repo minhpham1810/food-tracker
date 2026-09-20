@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { Card } from './Card';
 import { formatTemperature, useSettings, type TemperatureUnit } from '@/lib/settings';
-import { eyebrow, fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
+import { fontSize, sectionTitle, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 import { AGING_RATE_EMPHASIS } from '@/lib/estimate';
 import type { TelemetryState } from '@/lib/types';
 
@@ -79,7 +79,7 @@ export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
   return (
     <Card style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.eyebrow}>{disconnected ? 'LAST FRIDGE READINGS' : 'LIVE FRIDGE'}</Text>
+        <Text style={styles.heading}>{disconnected ? 'Last fridge readings' : 'Live fridge'}</Text>
         <Text style={styles.meta}>
           {status}
         </Text>
@@ -100,9 +100,9 @@ export function TelemetryStrip({ telemetry, paused, scenario }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  card: { marginBottom: spacing.lg },
+  card: { marginBottom: spacing.md },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eyebrow: { ...eyebrow, color: colors.textDim },
+  heading: { ...sectionTitle, color: colors.text },
   meta: { color: colors.textDim, fontSize: fontSize.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, marginTop: spacing.xs },
   cell: { minWidth: 78, gap: 3 },

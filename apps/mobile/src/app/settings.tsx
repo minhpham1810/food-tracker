@@ -54,10 +54,6 @@ export default function SettingsScreen() {
       <Card>
         <View style={styles.settingRow}>
           <Text style={styles.rowLabel}>Temperature unit</Text>
-          <Text style={styles.copy}>
-            This changes displayed temperatures only. Freshness calculations continue using the
-            original Celsius sensor data.
-          </Text>
           <View style={styles.chipRow}>
             {(Object.keys(UNIT_LABELS) as TemperatureUnit[]).map((unit) => (
               <Chip
@@ -92,7 +88,7 @@ export default function SettingsScreen() {
           <Pressable accessibilityRole="button" style={styles.manualLink}>
             <View style={styles.manualText}>
               <Text style={styles.manualTitle}>User manual</Text>
-              <Text style={styles.copy}>Learn how to scan, track, correct and ask about food.</Text>
+              <Text style={styles.copy}>How to scan, track and correct what is in the fridge.</Text>
             </View>
             <ChevronRight color={colors.textDim} />
           </Pressable>
@@ -100,8 +96,8 @@ export default function SettingsScreen() {
       </Card>
 
       <Text style={styles.disclaimer}>
-        Freshness Tracker is a prototype for storage guidance, not a food-safety device. When in
-        doubt, inspect the food and follow official safety advice.
+        A prototype for storage guidance, not a food-safety device. When in doubt, inspect the
+        food and follow official safety advice.
       </Text>
     </ScrollView>
   );

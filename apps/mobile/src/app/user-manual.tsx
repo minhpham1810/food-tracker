@@ -6,27 +6,27 @@ import { fontSize, spacing, useStyles, type ThemeColors } from '@/lib/theme';
 const sections = [
   {
     title: '1 · Add food',
-    body: 'Tap the center Add button. Photograph the front label and any separate date, size or lot-code areas. You can use up to five photos of the same package. Review every extracted field before adding the item. If there is no readable label, choose Add manually.',
+    body: 'Tap the + button and photograph the label. Add more photos if the date, size or lot code sit elsewhere on the package, up to five in all. Check every field before adding. If there is no readable label, choose Add manually.',
   },
   {
-    title: '2 · Read the fridge screen',
-    body: 'Items are ordered by urgency. The estimate uses recorded temperature exposure; experimental gas and color-label signals may shorten it, but never extend it. “Outside modelled range” means the app cannot make a defensible estimate from the available profile.',
+    title: '2 · Read the fridge',
+    body: 'Items are ordered by urgency, soonest first, and each one shows the days left. The line above them is the fridge right now; it turns orange when the fridge is warm enough to spend shelf life faster. “Outside modelled range” means the app cannot make a defensible estimate for that food.',
   },
   {
     title: '3 · Update an item',
-    body: 'Tap an item to see Maximize remaining time, rename it, correct its food category, mark it opened, score a supported colorimetric label, or remove it. The recommendation compares the current temperature with a 4°C reference and includes category-specific storage advice. Humidity does not directly change calculated days.',
+    body: 'Tap an item for its estimate, what to change to keep it longer, and its storage advice. From there you can rename it, correct its category, mark it opened or remove it. Humidity does not change the days left.',
   },
   {
     title: '4 · Use the assistant',
-    body: 'Open Assistant and type a question, or tap the microphone in a native app build. The assistant can read fridge state and request controlled actions such as marking an item opened. Ollama and the Freshness API must be running for replies.',
+    body: 'Open Assistant and type a question, or tap the microphone in a native build. It can read the fridge and make controlled changes, such as marking an item opened. It needs the local model server running.',
   },
   {
-    title: '5 · Check alerts and sensors',
-    body: 'The bell opens active fridge and food alerts. Live Fridge shows the latest temperature, humidity and experimental gas status. “Disconnected” or “Unavailable” means the app does not have a recent usable reading; it does not mean conditions are safe.',
+    title: '5 · Check alerts',
+    body: 'The bell opens active fridge and food alerts. “Fridge sensor offline” means there is no recent reading — it does not mean conditions are fine.',
   },
   {
     title: '6 · Fix connection problems',
-    body: 'Keep the phone and API computer on the same network. Confirm the API address in the mobile .env file uses the computer’s LAN address, not localhost. For voice input, use a rebuilt native app and allow both microphone and speech-recognition permissions.',
+    body: 'Keep the phone and the API computer on the same network, and point the app at the computer’s LAN address rather than localhost. Voice input needs a native build with microphone and speech-recognition permissions.',
   },
 ] as const;
 
@@ -35,8 +35,7 @@ export default function UserManualScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.intro}>
-        A quick guide to the Freshness Tracker prototype. Estimates support storage decisions;
-        they do not certify that food is safe to eat.
+        Estimates support storage decisions. They do not certify that food is safe to eat.
       </Text>
       {sections.map((section) => (
         <Card key={section.title}>

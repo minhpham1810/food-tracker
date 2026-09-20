@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,36 +27,32 @@ import {
   setLabelScore,
 } from '@/lib/api';
 import {
-  eyebrow,
   fontSize,
   radius,
-  shadows,
+  sectionTitle,
   spacing,
   useStyles,
   useTheme,
   type ThemeColors,
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
-import { parsePrintedDate } from '@/lib/dates';
 import {
   estimate,
   dayBudgetText,
-  agingRateText,
   currentConditionsText,
-  AGING_RATE_EMPHASIS,
   AGING_RATE_CORRECTION,
   statusLabel,
 } from '@/lib/estimate';
 import { formatTemperature, useSettings } from '@/lib/settings';
 
-/** Matches the dashboard's cadence so the aging rate tracks new readings. */
+/** Matches the fridge screen's cadence so the estimate tracks new readings. */
 const ITEM_POLL_INTERVAL_MS = 3000;
 
 const statusCopy: Record<ItemState['status'], string> = {
-  fresh: 'Tracks aligned with the temperature-history forecast.',
-  check_early: "Something's off — check this early.",
-  past_budget_quiet: 'Past date but no spoilage signal — inspect before tossing.',
-  discard_quality_signal: 'Quality decline signal detected — discard this item.',
+  fresh: 'No spoilage signal from the sensors.',
+  check_early: 'Something looks off. Check this one early.',
+  past_budget_quiet: 'Past its estimate, with no spoilage signal. Inspect before tossing.',
+  discard_quality_signal: 'A quality-decline signal came through. Discard this.',
 };
 
 /** The three states the two-patch colorimetric label can be scored as. */
@@ -65,28 +62,25 @@ const labelScores = [
   ['Spoiled', 0.1],
 ] as const;
 
-function percent(value: number | null, fallback: string): string {
-  return value == null ? fallback : `${Math.round(value * 100)}%`;
-}
-
 function temperatureRecommendation(
   optimization: ItemState['storage_optimization'],
   temperatureUnit: Parameters<typeof formatTemperature>[1],
 ): string {
   const target = formatTemperature(optimization.target_temperature_c, temperatureUnit);
-  const current = optimization.current_temperature_c == null
-    ? null
-    : formatTemperature(optimization.current_temperature_c, temperatureUnit);
+  const current =
+    optimization.current_temperature_c == null
+      ? null
+      : formatTemperature(optimization.current_temperature_c, temperatureUnit);
 
   switch (optimization.temperature_action) {
     case 'cool_to_target':
-      return `Lower the refrigerator to ${target} or below. The current ${current} reading is consuming this item's temperature budget faster.`;
+      return `Lower the fridge to ${target} or below.`;
     case 'maintain':
-      return `Keep the temperature stable. The current ${current} reading is already at or below the ${target} reference.`;
+      return `The fridge is at ${current}. Keep it there.`;
     case 'check_freezing':
-      return `Check this item's placement: ${current} is below freezing. Colder slows the model, but accidental freezing can damage food quality.`;
+      return `${current} is below freezing. Colder slows spoilage, but freezing can damage quality.`;
     default:
-      return `Restore a live, usable temperature reading, then keep the refrigerator at ${target} or below.`;
+      return `No live temperature reading. Keep the fridge at ${target} or below.`;
   }
 }
 
@@ -99,6 +93,7 @@ export default function ItemDetailScreen() {
   const [item, setItem] = useState<ItemState | null>(null);
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
   const [draftName, setDraftName] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -120,9 +115,9 @@ export default function ItemDetailScreen() {
       .catch(() => setProfiles([]));
   }, [load]);
 
-  // The aging rate reflects the newest reading, so this screen polls like the
-  // dashboard. Unlike load() it leaves draftName alone, so a rename in
-  // progress is not overwritten, and it stands down during a mutation.
+  // The estimate reflects the newest reading, so this screen polls like the
+  // fridge. Unlike load() it leaves draftName alone, so a rename in progress is
+  // not overwritten, and it stands down during a mutation.
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   useEffect(() => {
@@ -180,19 +175,23 @@ export default function ItemDetailScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading item…</Text>
       </View>
     );
   }
 
-  // Comparison only: the printed date never enters the freshness calculation.
-  const printed = parsePrintedDate(item.printed_date);
-  const printedDays = printed === null ? null : Math.max(0, (printed.getTime() - Date.now()) / 86400000);
-
   const palette = statusColors[item.status];
   const est = estimate(item);
-  // Same value/label pair as the hero, flattened to one line for running text.
-  const estimateLine = est.value !== null ? `${est.value} ${est.label}` : est.label;
+  const optimization = item.storage_optimization;
+  // Honesty about the data behind the number, in one line or none at all.
+  const caveat = item.t_eff_incomplete ? item.history_message : item.estimate_message;
+  // Label fields and provenance: real, occasionally useful, never the headline.
+  const details = [
+    { label: 'Brand', value: item.brand },
+    { label: 'Printed date', value: item.printed_date },
+    { label: 'Package size', value: item.package_size },
+    { label: 'Lot code', value: item.lot_code },
+    { label: 'Added', value: new Date(item.created_at * 1000).toLocaleDateString() },
+  ].filter((row) => row.value);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -200,12 +199,13 @@ export default function ItemDetailScreen() {
 
       {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* Hero: the item's status, number and confidence at a glance. */}
-      <View
-        style={[styles.hero, { backgroundColor: palette.wash, borderColor: palette.border }, shadows.hero]}>
+      {/* Hero: one status, one number, and the action that changes them. */}
+      <View style={[styles.hero, { backgroundColor: palette.wash, borderColor: palette.border }]}>
         <View style={styles.heroHeader}>
-          <Text style={[styles.heroEyebrow, { color: palette.fg }]}>{statusLabel[item.status]}</Text>
-          <Pill label={item.confidence} {...confidenceColors[item.confidence]} />
+          <Text style={[styles.status, { color: palette.fg }]}>{statusLabel[item.status]}</Text>
+          {item.opened && (
+            <Pill label="Opened" fg={colors.textMuted} border={colors.borderStrong} />
+          )}
         </View>
         <View style={styles.numberRow}>
           {est.value !== null ? (
@@ -217,166 +217,65 @@ export default function ItemDetailScreen() {
             <Text style={[styles.numberFallback, { color: palette.fg }]}>{est.label}</Text>
           )}
         </View>
-        {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
-        {/* The headline assumes 4C. When the fridge is warmer that assumption
-            is optimistic, so the correction sits directly beneath the number
-            it corrects. Hidden without a usable reading -- never guessed at. */}
+        {!item.outside_model_range && (
+          <FreshnessBar daysLeft={item.days_left} status={item.status} />
+        )}
+        {/* The headline assumes 4C. When the fridge is warmer that assumption is
+            optimistic, so the correction sits directly beneath the number it
+            corrects. Hidden without a usable reading -- never guessed at. */}
         {item.aging_rate != null
           && item.aging_rate > AGING_RATE_CORRECTION
-          && item.storage_optimization.current_temperature_c !== null
-          && item.storage_optimization.projected_days_at_current_temperature !== null && (
-          <Text style={styles.currentConditions}>
+          && optimization.current_temperature_c !== null
+          && optimization.projected_days_at_current_temperature !== null && (
+          <Text style={styles.correction}>
             {currentConditionsText(
-              item.storage_optimization.projected_days_at_current_temperature,
-              formatTemperature(item.storage_optimization.current_temperature_c, temperatureUnit),
+              optimization.projected_days_at_current_temperature,
+              formatTemperature(optimization.current_temperature_c, temperatureUnit),
             )}
           </Text>
         )}
-        <Text style={styles.statusCopy}>
-          {item.t_eff_incomplete ? item.history_message : statusCopy[item.status]}
-        </Text>
-        <Button
-          title={item.opened ? 'Opened' : 'Mark opened'}
-          disabled={item.opened || pending}
-          onPress={() => void mutate(() => markOpened(item.id))}
-        />
+        <Text style={styles.copy}>{statusCopy[item.status]}</Text>
+        {caveat !== null && <Text style={styles.caveat}>{caveat}</Text>}
+        {!item.opened && (
+          <Button
+            title="Mark opened"
+            variant="secondary"
+            disabled={pending}
+            onPress={() => void mutate(() => markOpened(item.id))}
+          />
+        )}
       </View>
 
       <Card>
-        <Text style={styles.eyebrow}>WHY THIS NUMBER</Text>
-        {/* Current conditions, not a prediction about the food. */}
-        <Text
-          style={[
-            styles.agingRate,
-            item.aging_rate != null && item.aging_rate >= AGING_RATE_EMPHASIS && styles.agingRateHot,
-          ]}>
-          {agingRateText(item.aging_rate)}
-        </Text>
-        <Text style={styles.agingRateCaption}>Current fridge conditions, not a forecast</Text>
-        <Text style={styles.statusCopy}>
-          Assuming continued storage at{' '}
-          {formatTemperature(item.projection_temperature_c, temperatureUnit)}
-        </Text>
-        {item.estimate_message && <Text style={styles.statusCopy}>{item.estimate_message}</Text>}
-        {printedDays !== null && (
-          <Text style={styles.comparison}>
-            Printed date: {printedDays.toFixed(0)} days · Our estimate: {estimateLine}
-          </Text>
-        )}
-      </Card>
-
-      <Card>
-        <Text style={styles.eyebrow}>MAXIMIZE REMAINING TIME</Text>
-        <Text style={styles.recommendationTitle}>
-          {temperatureRecommendation(item.storage_optimization, temperatureUnit)}
-        </Text>
-        {item.storage_optimization.temperature_action === 'cool_to_target'
-          && item.storage_optimization.projected_days_at_current_temperature !== null
-          && item.storage_optimization.projected_days_at_target_temperature !== null && (
-          <View style={styles.projectionBox}>
-            <View style={styles.trackRow}>
-              <Text style={styles.trackLabel}>If current temperature continues</Text>
-              <Text style={styles.trackValue}>
-                {dayBudgetText(item.storage_optimization.projected_days_at_current_temperature)}
+        <Text style={styles.heading}>Keep it longer</Text>
+        <Text style={styles.copy}>{temperatureRecommendation(optimization, temperatureUnit)}</Text>
+        {optimization.temperature_action === 'cool_to_target'
+          && optimization.projected_days_at_current_temperature !== null
+          && optimization.projected_days_at_target_temperature !== null
+          && optimization.current_temperature_c !== null && (
+          <View style={styles.projection}>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>
+                At {formatTemperature(optimization.current_temperature_c, temperatureUnit)}
+              </Text>
+              <Text style={styles.rowValue}>
+                {dayBudgetText(optimization.projected_days_at_current_temperature)}
               </Text>
             </View>
-            <View style={styles.divider} />
-            <View style={styles.trackRow}>
-              <Text style={styles.trackLabel}>
-                At {formatTemperature(item.storage_optimization.target_temperature_c, temperatureUnit)}
+            <View style={[styles.row, styles.rowDivider]}>
+              <Text style={styles.rowLabel}>
+                At {formatTemperature(optimization.target_temperature_c, temperatureUnit)}
               </Text>
-              <Text style={styles.trackValue}>
-                {dayBudgetText(item.storage_optimization.projected_days_at_target_temperature)}
+              <Text style={styles.rowValue}>
+                {dayBudgetText(optimization.projected_days_at_target_temperature)}
               </Text>
             </View>
           </View>
         )}
-        <Text style={styles.recommendationBullet}>• {item.advice}</Text>
-        <Text style={styles.recommendationBullet}>
-          • Humidity does not directly change the days-left calculation. Use the storage advice
-          above for the right drawer or container instead of chasing a sensor number.
-        </Text>
-        <Text style={styles.footnote}>
-          This is a future Track A scenario, not recovered time or a safety guarantee. Gas and
-          color signals can shorten the estimate, but changing them cannot extend it.
-        </Text>
+        <Text style={styles.copy}>{item.advice}</Text>
       </Card>
 
       <Card>
-        <Text style={styles.eyebrow}>HOW THIS IS CALCULATED</Text>
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Profile</Text>
-          <Text style={styles.trackValue}>{item.profile_name}</Text>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>D0 source</Text>
-          <Text style={styles.trackValue}>{item.d0_source}</Text>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Q10 source</Text>
-          <Text style={styles.trackValue}>{item.q10_source}</Text>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Tracking started</Text>
-          <Text style={styles.trackValue}>{new Date(item.created_at * 1000).toLocaleString()}</Text>
-        </View>
-        {item.placeholder_profile && (
-          <View style={styles.badgeRow}>
-            <Pill label="Demo coefficients" fg={colors.textDim} border={colors.borderStrong} />
-          </View>
-        )}
-      </Card>
-
-      {item.fusion_uncertainty.used_for_estimate ? <Card>
-        <Text style={styles.eyebrow}>EXPERIMENTAL FUSION</Text>
-
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Track A · temperature + time</Text>
-          <Text style={styles.trackValue}>{item.outside_model_range ? item.model_message : dayBudgetText(item.track_a_days_left)}</Text>
-        </View>
-        <View style={styles.divider} />
-
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Track B · gas anomaly</Text>
-          {/* A missing baseline is "unavailable", never evidence of freshness. */}
-          <Text style={styles.trackValue}>{percent(item.gas_anomaly, 'Unavailable')}</Text>
-        </View>
-        <View style={styles.divider} />
-
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Track C · colorimetric label</Text>
-          <Text style={styles.trackValue}>{percent(item.color_score, 'Not scored')}</Text>
-        </View>
-        {/* Track C's control sits directly under its reading, so the cause and
-            effect of scoring a label are visible in one place. */}
-        <View style={styles.buttonRow}>
-          {labelScores.map(([label, score]) => (
-            <Button
-              key={label}
-              title={label}
-              variant="secondary"
-              disabled={pending}
-              style={styles.flexButton}
-              onPress={() => void mutate(() => setLabelScore(item.id, score))}
-            />
-          ))}
-        </View>
-        <Text style={styles.footnote}>
-          Only Track A produces a days-left figure. B and C can shorten or zero it, never extend
-          it. Scoring the label is manual — this is not food-image analysis.
-        </Text>
-      </Card>
-
-      : <Card>
-        <Text style={styles.eyebrow}>TEMPERATURE + TIME ESTIMATE</Text>
-        <Text style={styles.footnote}>Fridge gas is experimental and does not change this item's estimate. Fusion weights and calibration uncertainty are unused.</Text>
-      </Card>}
-
-      <Card>
-        <Text style={styles.eyebrow}>CORRECT THIS ITEM</Text>
         <Text style={styles.fieldLabel}>Name</Text>
         <TextInput
           style={styles.input}
@@ -385,13 +284,15 @@ export default function ItemDetailScreen() {
           placeholder="Item name"
           placeholderTextColor={colors.textDim}
         />
-        <Button
-          title="Save name"
-          disabled={pending || draftName.trim().length === 0 || draftName === item.name}
-          onPress={() => void mutate(() => renameItem(item.id, draftName.trim()))}
-        />
+        {draftName.trim().length > 0 && draftName.trim() !== item.name && (
+          <Button
+            title="Save name"
+            disabled={pending}
+            onPress={() => void mutate(() => renameItem(item.id, draftName.trim()))}
+          />
+        )}
 
-        <Text style={styles.fieldLabel}>Food category</Text>
+        <Text style={styles.fieldLabel}>Category</Text>
         <View style={styles.chipRow}>
           {profiles.map((profile) => (
             <Chip
@@ -404,28 +305,60 @@ export default function ItemDetailScreen() {
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.eyebrow}>LABEL DATA</Text>
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Brand</Text>
-          <Text style={styles.trackValue}>{item.brand ?? '—'}</Text>
-        </View>
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Printed date</Text>
-          <Text style={styles.trackValue}>{item.printed_date ?? '—'}</Text>
-        </View>
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Package size</Text>
-          <Text style={styles.trackValue}>{item.package_size ?? '—'}</Text>
-        </View>
-        <View style={styles.trackRow}>
-          <Text style={styles.trackLabel}>Lot code</Text>
-          <Text style={styles.trackValue}>{item.lot_code ?? '—'}</Text>
-        </View>
-        <View style={styles.divider} />
-        <Text style={styles.fieldLabel}>Storage advice</Text>
-        <Text style={styles.advice}>{item.advice}</Text>
-      </Card>
+      <View style={styles.details}>
+        <Pressable accessibilityRole="button" onPress={() => setShowDetails((shown) => !shown)}>
+          <Text style={styles.disclosure}>{showDetails ? 'Hide details' : 'Details'}</Text>
+        </Pressable>
+        {showDetails && (
+          <Card>
+            {details.map((row, index) => (
+              <View key={row.label} style={[styles.row, index > 0 && styles.rowDivider]}>
+                <Text style={styles.rowLabel}>{row.label}</Text>
+                <Text style={styles.rowValue}>{row.value}</Text>
+              </View>
+            ))}
+            <View style={[styles.row, styles.rowDivider]}>
+              <Text style={styles.rowLabel}>Confidence</Text>
+              <Pill label={item.confidence} {...confidenceColors[item.confidence]} />
+            </View>
+            {item.placeholder_profile && (
+              <Text style={styles.footnote}>
+                This category uses demo coefficients, not validated shelf-life data.
+              </Text>
+            )}
+
+            {/* Gas and the colorimetric label only appear when they can act on
+                the estimate; the control sits under its own reading. */}
+            {item.fusion_uncertainty.used_for_estimate && (
+              <>
+                <View style={[styles.row, styles.rowDivider]}>
+                  <Text style={styles.rowLabel}>Fridge gas</Text>
+                  {/* A missing baseline is "unavailable", never evidence of freshness. */}
+                  <Text style={styles.rowValue}>
+                    {item.gas_anomaly == null
+                      ? 'Unavailable'
+                      : `${Math.round(item.gas_anomaly * 100)}%`}
+                  </Text>
+                </View>
+                <Text style={styles.fieldLabel}>Colour label</Text>
+                <View style={styles.chipRow}>
+                  {labelScores.map(([label, score]) => (
+                    <Chip
+                      key={label}
+                      label={label}
+                      selected={item.color_score === score}
+                      onPress={() => void mutate(() => setLabelScore(item.id, score))}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.footnote}>
+                  Gas and label readings can shorten the estimate, never extend it.
+                </Text>
+              </>
+            )}
+          </Card>
+        )}
+      </View>
 
       <Button
         title="Remove from fridge"
@@ -442,14 +375,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bg,
-  },
-  muted: { color: colors.textMuted, fontSize: fontSize.sm },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   errorText: { color: colors.danger, fontSize: fontSize.sm },
 
   hero: {
@@ -459,7 +385,7 @@ const makeStyles = (colors: ThemeColors) =>
     gap: spacing.md,
   },
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  heroEyebrow: { ...eyebrow },
+  status: { ...sectionTitle, fontWeight: '700' },
   numberRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   number: {
     fontSize: fontSize.display,
@@ -476,59 +402,34 @@ const makeStyles = (colors: ThemeColors) =>
   // A status word (no figure) never goes through the 52pt display type --
   // that size is tuned for one or two digits.
   numberFallback: { fontSize: fontSize.xl, fontWeight: '800' },
-  // A warning, not a competing headline: amber like the aging rate, but well
-  // below the display-size number it corrects.
-  currentConditions: {
-    color: colors.warning,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    lineHeight: 20,
-    marginTop: spacing.sm,
-  },
-  agingRate: {
-    color: colors.text,
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    marginTop: spacing.sm,
-  },
-  // Warm fridge: larger and amber, so it reads at a glance from a distance.
-  agingRateHot: { color: colors.warning, fontSize: fontSize.xl, fontWeight: '800' },
-  agingRateCaption: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },
-  statusCopy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
-  comparison: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
-  badgeRow: { flexDirection: 'row' },
-  recommendationTitle: {
-    color: colors.text,
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    lineHeight: 22,
-    marginTop: spacing.xs,
-  },
-  projectionBox: {
-    backgroundColor: colors.inputBg,
+  // A warning, not a competing headline: well below the number it corrects.
+  correction: { color: colors.warning, fontSize: fontSize.md, fontWeight: '700', lineHeight: 20 },
+  copy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
+  caveat: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },
+
+  heading: { ...sectionTitle, color: colors.text },
+  // The page background, not the card's: an inset tone in both schemes.
+  projection: {
+    backgroundColor: colors.bg,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    marginTop: spacing.xs,
   },
-  recommendationBullet: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
-
-  eyebrow: { ...eyebrow, color: colors.textDim },
-  trackRow: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     paddingVertical: spacing.sm,
   },
-  trackLabel: { color: colors.textMuted, fontSize: fontSize.sm, flexShrink: 1 },
-  trackValue: { color: colors.text, fontSize: fontSize.sm, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: colors.border },
-  footnote: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16, marginTop: spacing.xs },
-  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
+  rowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  rowLabel: { color: colors.textMuted, fontSize: fontSize.sm, flexShrink: 1 },
+  rowValue: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  details: { gap: spacing.sm },
+  disclosure: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '600' },
+  footnote: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  flexButton: { flex: 1 },
   fieldLabel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: spacing.sm },
   input: {
     backgroundColor: colors.inputBg,
@@ -540,6 +441,5 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.text,
     fontSize: fontSize.sm,
   },
-  advice: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   deleteButton: { borderColor: colors.dangerBorder },
 });

@@ -2,18 +2,8 @@ import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { FreshnessBar } from './FreshnessBar';
-import { itemMeta, statusWord } from './ItemRow';
 import { itemPhotoUrl } from '@/lib/api';
-import {
-  fontSize,
-  radius,
-  shadows,
-  spacing,
-  useStyles,
-  useTheme,
-  type ThemeColors,
-} from '@/lib/theme';
+import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
 import { estimate } from '@/lib/estimate';
 
@@ -24,22 +14,22 @@ interface Props {
 }
 
 /**
- * Grid-view tile, laid out like a Google Drive file card: a large preview area
- * on top -- the label photo for a scanned item, otherwise the days-left number
- * on the status wash -- and the name underneath.
+ * Grid tile: a preview area carrying the one number that matters -- the label
+ * photo for a scanned item, otherwise the days left on the status wash -- and
+ * the name underneath. No status word and no bar: at this size the color and
+ * the figure say the same thing three times over.
  */
 export function ItemTile({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
-  const { statusColors, colors } = useTheme();
+  const { statusColors } = useTheme();
   const palette = statusColors[item.status];
-  const meta = itemMeta(item);
   const { value, label } = estimate(item);
 
   // Link asChild clones its single child, and expo-router rejects a style ARRAY
   // on that child -- flatten it into one object first.
   const tileStyle = StyleSheet.flatten([
     styles.tile,
-    highlighted ? [styles.highlighted, { borderColor: palette.bar }, shadows.hero] : shadows.card,
+    highlighted && { borderColor: palette.bar },
   ]);
 
   return (
@@ -56,9 +46,7 @@ export function ItemTile({ item, highlighted = false }: Props) {
               transition={120}
             />
           )}
-          <View style={[styles.statusBadge, { backgroundColor: colors.surface, borderColor: palette.border }]}>
-            <Text style={[styles.statusBadgeText, { color: palette.fg }]}>{statusWord(item.status)}</Text>
-          </View>
+          {item.opened && <Text style={styles.opened}>Opened</Text>}
           {item.has_photo === true ? (
             // On a photo the number needs its own backdrop, and `bar` rather than
             // `fg`: `fg` is tuned to read on a card, not on a dark scrim.
@@ -86,10 +74,6 @@ export function ItemTile({ item, highlighted = false }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {meta ?? ' '}
-          </Text>
-          {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
         </View>
       </Pressable>
     </Link>
@@ -105,7 +89,6 @@ const makeStyles = (colors: ThemeColors) =>
     borderRadius: radius.md,
     overflow: 'hidden',
   },
-  highlighted: { borderWidth: 1.5 },
   preview: {
     aspectRatio: 1.35,
     alignItems: 'center',
@@ -113,19 +96,16 @@ const makeStyles = (colors: ThemeColors) =>
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  statusBadge: {
+  numberRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing.xs },
+  number: { fontSize: 40, fontWeight: '800', letterSpacing: -1.5, textAlign: 'center' },
+  numberUnit: { color: colors.textMuted, fontSize: fontSize.xs, paddingBottom: 7 },
+  opened: {
     position: 'absolute',
     top: spacing.sm,
-    right: spacing.sm,
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 2,
+    left: spacing.md,
+    color: colors.textDim,
+    fontSize: fontSize.xs,
   },
-  statusBadgeText: { fontSize: fontSize.xs, fontWeight: '700' },
-  numberRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing.xs },
-  number: { fontSize: 22, fontWeight: '800', letterSpacing: -1, textAlign: 'center' },
-  numberUnit: { color: colors.textMuted, fontSize: fontSize.xs, paddingBottom: 3 },
   statusWord: { fontSize: fontSize.sm, fontWeight: '700', textAlign: 'center', paddingHorizontal: spacing.sm },
   // Fixed black/white: this sits on the photo, not on a themed surface.
   scrim: {
@@ -140,7 +120,6 @@ const makeStyles = (colors: ThemeColors) =>
   scrimRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
   scrimNumber: { fontSize: fontSize.lg, fontWeight: '800', letterSpacing: -0.4 },
   scrimUnit: { color: '#FBF5E3', fontSize: fontSize.xs, fontWeight: '600', paddingBottom: 2 },
-  footer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs, gap: 2 },
+  footer: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   name: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
-  meta: { color: colors.textDim, fontSize: fontSize.xs },
 });

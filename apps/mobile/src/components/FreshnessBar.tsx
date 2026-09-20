@@ -44,7 +44,7 @@ export function FreshnessBar({ daysLeft, status }: Props) {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   track: {
-    height: 6,
+    height: 4,
     backgroundColor: colors.border,
     borderRadius: radius.pill,
     overflow: 'hidden',

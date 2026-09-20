@@ -42,7 +42,6 @@ export default function ScanScreen() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [categoryConfirmed, setCategoryConfirmed] = useState(false);
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
-  const [showRawText, setShowRawText] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Tabs stay mounted, so a one-time fetch would keep a stale category list
@@ -61,7 +60,6 @@ export default function ScanScreen() {
     setResult(null);
     setDraft(null);
     setProfileId(null);
-    setShowRawText(false);
   };
 
   const clearScanResult = () => {
@@ -69,7 +67,6 @@ export default function ScanScreen() {
     setResult(null);
     setDraft(null);
     setProfileId(null);
-    setShowRawText(false);
   };
 
   const pickPhotos = async (source: 'camera' | 'library') => {
@@ -178,11 +175,7 @@ export default function ScanScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.hint}>
-        Add up to {MAX_PHOTOS} views of the same package, such as the front, date stamp, and size.
-        Local Qwen vision reads them together. Check every field before adding because label reads
-        are rarely perfect.
-      </Text>
+      <Text style={styles.hint}>Photograph the label, then check the fields before adding.</Text>
 
       <View style={styles.buttonRow}>
         <Button
@@ -210,9 +203,6 @@ export default function ScanScreen() {
 
       {photoUris.length > 0 && (
         <>
-          <Text style={styles.photoCount}>
-            {photoUris.length} {photoUris.length === 1 ? 'photo' : 'photos'} added
-          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -233,11 +223,7 @@ export default function ScanScreen() {
           </ScrollView>
           {!result && (
             <Button
-              title={
-                scanning
-                  ? 'Reading photos…'
-                  : `Scan ${photoUris.length === 1 ? 'photo' : 'photos'} with Qwen`
-              }
+              title={scanning ? 'Reading…' : 'Read label'}
               disabled={scanning}
               onPress={() => void scanPhotos()}
             />
@@ -258,10 +244,8 @@ export default function ScanScreen() {
         <Card>
           <Text style={styles.sectionTitle}>Couldn&apos;t read this label</Text>
           <Text style={styles.muted}>
-            No text came back at all. That is almost always the photo rather than the label:
-            hold steady until it focuses, add light, and fill the frame with the text. Blur is
-            the usual culprit — past a certain point the characters simply aren&apos;t in the
-            image.
+            No text came through. Hold steady until it focuses, add light, and fill the frame
+            with the text.
           </Text>
           <Button title="Add another photo" onPress={() => void pickPhotos('camera')} />
           <Button title="Scan again" variant="secondary" onPress={() => void scanPhotos()} />
@@ -271,11 +255,10 @@ export default function ScanScreen() {
 
       {result && draft && !unreadable && (
         <Card>
-          <Text style={styles.sectionTitle}>Check and correct</Text>
-          <Text style={[styles.muted, result.confidence < LOW_CONFIDENCE && styles.warnText]}>
-            OCR confidence: {Math.round(result.confidence * 100)}%
-            {result.confidence < LOW_CONFIDENCE ? ' — low, check each field carefully' : ''}
-          </Text>
+          <Text style={styles.sectionTitle}>Check the details</Text>
+          {result.confidence < LOW_CONFIDENCE && (
+            <Text style={styles.warnText}>The label read poorly. Check each field.</Text>
+          )}
 
           <LabeledInput
             label="Product name"
@@ -308,11 +291,10 @@ export default function ScanScreen() {
             placeholder="e.g. 1 gal"
           />
 
-          <Text style={styles.fieldLabel}>Food category</Text>
-          <Text style={styles.warnText}>Tap the correct category to confirm it, even if OCR suggested one.</Text>
-          {profileId === null && (
+          <Text style={styles.fieldLabel}>Category</Text>
+          {!categoryConfirmed && (
             <Text style={styles.warnText}>
-              OCR didn&apos;t recognise this food — pick a category so the freshness budget is right.
+              Tap the right category to confirm it — it sets the freshness budget.
             </Text>
           )}
           <View style={styles.chipRow}>
@@ -326,20 +308,8 @@ export default function ScanScreen() {
             ))}
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setShowRawText((shown) => !shown)}
-            style={styles.disclosure}>
-            <Text style={styles.disclosureText}>
-              {showRawText ? 'Hide raw OCR text' : 'Show raw OCR text'}
-            </Text>
-          </Pressable>
-          {showRawText && (
-            <Text style={styles.rawText}>{result.raw_text || '(No label text was recognized)'}</Text>
-          )}
-
           <Button
-            title={confirming ? 'Adding…' : 'Confirm & add to fridge'}
+            title={confirming ? 'Adding…' : 'Add to fridge'}
             disabled={!canConfirm}
             onPress={() => void confirm()}
           />
@@ -362,7 +332,6 @@ const makeStyles = (colors: ThemeColors) =>
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   flexButton: { flex: 1 },
-  photoCount: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   previewRow: { gap: spacing.sm },
   previewTile: { width: 180, gap: spacing.xs },
   preview: {
@@ -378,14 +347,4 @@ const makeStyles = (colors: ThemeColors) =>
   disclosure: { paddingVertical: spacing.xs },
   disclosureText: { color: colors.accentText, fontSize: fontSize.xs, fontWeight: '600' },
   manualLink: { color: colors.accentText, fontSize: fontSize.sm, fontWeight: '700' },
-  rawText: {
-    color: colors.codeText,
-    fontSize: fontSize.xs,
-    backgroundColor: colors.inputBg,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    padding: spacing.sm,
-    lineHeight: 16,
-  },
 });
