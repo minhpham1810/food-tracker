@@ -501,6 +501,8 @@ class FreshnessService:
         if stale or self.store.data_gap_hours > 0:
             confidence = "low"
         item.state = fused.status
+        aging_rate = current_aging_rate(
+            latest.temperature if latest is not None and not stale else None, profile.q10)
         return ItemState(
             id=item.id,
             name=item.name,
@@ -534,8 +536,7 @@ class FreshnessService:
             q10_source=profile.q10_source or "placeholder",
             projection_temperature_c=PROJECTION_TEMPERATURE_C,
             # A stale reading must not be presented as the current rate.
-            aging_rate=current_aging_rate(
-                latest.temperature if latest is not None and not stale else None, profile.q10),
+            aging_rate=aging_rate,
             storage_optimization=self._storage_optimization(
                 item,
                 latest.temperature if latest is not None else None,

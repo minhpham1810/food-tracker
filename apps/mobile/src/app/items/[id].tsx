@@ -37,7 +37,15 @@ import {
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
 import { parsePrintedDate } from '@/lib/dates';
-import { estimate, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS, statusLabel } from '@/lib/estimate';
+import {
+  estimate,
+  dayBudgetText,
+  agingRateText,
+  currentConditionsText,
+  AGING_RATE_EMPHASIS,
+  AGING_RATE_CORRECTION,
+  statusLabel,
+} from '@/lib/estimate';
 import { formatTemperature, useSettings } from '@/lib/settings';
 
 /** Matches the dashboard's cadence so the aging rate tracks new readings. */
@@ -210,6 +218,20 @@ export default function ItemDetailScreen() {
           )}
         </View>
         {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
+        {/* The headline assumes 4C. When the fridge is warmer that assumption
+            is optimistic, so the correction sits directly beneath the number
+            it corrects. Hidden without a usable reading -- never guessed at. */}
+        {item.aging_rate != null
+          && item.aging_rate > AGING_RATE_CORRECTION
+          && item.storage_optimization.current_temperature_c !== null
+          && item.storage_optimization.projected_days_at_current_temperature !== null && (
+          <Text style={styles.currentConditions}>
+            {currentConditionsText(
+              item.storage_optimization.projected_days_at_current_temperature,
+              formatTemperature(item.storage_optimization.current_temperature_c, temperatureUnit),
+            )}
+          </Text>
+        )}
         <Text style={styles.statusCopy}>
           {item.t_eff_incomplete ? item.history_message : statusCopy[item.status]}
         </Text>
@@ -454,6 +476,15 @@ const makeStyles = (colors: ThemeColors) =>
   // A status word (no figure) never goes through the 52pt display type --
   // that size is tuned for one or two digits.
   numberFallback: { fontSize: fontSize.xl, fontWeight: '800' },
+  // A warning, not a competing headline: amber like the aging rate, but well
+  // below the display-size number it corrects.
+  currentConditions: {
+    color: colors.warning,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
   agingRate: {
     color: colors.text,
     fontSize: fontSize.lg,

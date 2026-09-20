@@ -48,3 +48,21 @@ export function agingRateText(rate: number | null): string {
   if (rate === null) return 'Aging rate unavailable';
   return `Aging ${rate.toFixed(1)}x normal speed`;
 }
+
+/**
+ * Below this the 4C headline is close enough that a correction would be noise.
+ * Above it the headline is optimistic and the user is told so.
+ */
+export const AGING_RATE_CORRECTION = 1.3;
+
+/**
+ * The honest correction to the 4C headline when the fridge is warmer than the
+ * model's reference. Rounds exactly like dayBudgetText so the two never
+ * disagree about where a day boundary falls.
+ */
+export function currentConditionsText(days: number, temperature: string): string {
+  if (days <= 0) return `At the current ${temperature}, already past budget`;
+  if (days < 1) return `At the current ${temperature}, less than 1 day`;
+  const whole = Math.floor(days);
+  return `At the current ${temperature}, closer to ${whole} ${whole === 1 ? 'day' : 'days'}`;
+}
