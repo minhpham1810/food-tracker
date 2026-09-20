@@ -11,8 +11,13 @@
       "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSCameraUsageDescription": "Freshness Tracker uses the camera to scan food labels.",
-        "NSPhotoLibraryUsageDescription": "Freshness Tracker reads photos so you can scan a food label from your library."
-      }
+        "NSPhotoLibraryUsageDescription": "Freshness Tracker reads photos so you can scan a food label from your library.",
+        "NSLocalNetworkUsageDescription": "Freshness Tracker talks to the freshness API running on your computer over Wi-Fi.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "bundleIdentifier": "com.minhpham.freshnesstracker"
     },
     "android": {
       "adaptiveIcon": {
@@ -43,7 +48,8 @@
           "photosPermission": "Allow Freshness Tracker to access your photos to scan food labels.",
           "cameraPermission": "Allow Freshness Tracker to use the camera to scan food labels."
         }
-      ]
+      ],
+      "./plugins/with-script-sandbox-disabled"
     ],
     "experiments": {
       "typedRoutes": false,
