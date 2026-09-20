@@ -3,7 +3,7 @@
 A food freshness prototype with a Python engine, FastAPI backend, telemetry
 simulator, and Expo mobile app. The app includes an inventory dashboard, telemetry
 and alerts, item details and editing, manual entry, label scanning with editable
-OCR results, and a local-model assistant.
+OCR results, and a local-model assistant with typed and voice-transcribed questions.
 
 This is a waste-reduction prototype, not a food-safety device. Food-profile
 coefficients are placeholders. Only the temperature track originates remaining
@@ -78,7 +78,8 @@ firewall and restart Expo after changing the environment file.
 
 Open the app using an Expo Go version compatible with SDK 57 or a development
 build. See the [mobile guide](apps/mobile/README.md) for verification and known
-platform limitations.
+platform limitations. Voice input uses a native speech-recognition module, so it
+requires a rebuilt development or release app rather than Expo Go.
 
 ## Demo and dataset replay
 

@@ -11,7 +11,8 @@ before changing SDK integrations.
 - Item details: rename, change category, mark opened, set color-label score, remove.
 - Scan: up to five camera/library images of one package, Qwen vision extraction,
   editable fields and category, confirm inventory entry.
-- Assistant: messages and tool-call results from the optional model server.
+- Assistant: typed or voice-transcribed messages and tool-call results from the
+  optional model server.
 
 Profiles come from the backend. An unavailable gas baseline is displayed as
 unavailable, not as evidence of freshness. Profile values are demo coefficients.
@@ -24,11 +25,23 @@ npx tsc --noEmit
 npx expo export --platform all
 ```
 
+Voice input uses the device's native speech recognizer. After installing dependencies
+or changing `app.json`, regenerate and rebuild the native app before testing it:
+
+```sh
+npx expo prebuild
+npm run ios
+```
+
+The microphone gracefully reports that a native build is required when the app is
+opened in Expo Go. On first use, iOS asks for microphone and speech-recognition access.
+
 On a phone, check manual add, item edits, mark opened, deletion, repeated camera capture,
 multi-select from the library, photo removal, permission denial, scan correction and
 confirmation, an unreachable backend, and assistant success/unavailability. Check empty
-inventory and telemetry without a gas baseline. Start a scenario using the root guide and
-check dashboard refresh.
+inventory and telemetry without a gas baseline. In a native build, check voice permission
+approval and denial, interim transcription, manual stop, transcript editing, and sending the
+transcribed question. Start a scenario using the root guide and check dashboard refresh.
 
 ## Current limitations
 

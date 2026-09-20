@@ -49,6 +49,13 @@
           "cameraPermission": "Allow Freshness Tracker to use the camera to scan food labels."
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Freshness Tracker to use the microphone for voice questions.",
+          "speechRecognitionPermission": "Allow Freshness Tracker to transcribe voice questions for the assistant."
+        }
+      ],
       "./plugins/with-script-sandbox-disabled"
     ],
     "experiments": {
