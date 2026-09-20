@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { SplashOverlay } from '@/components/SplashOverlay';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 
 /**
@@ -13,6 +14,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <SafeAreaProvider>
         <RootStack />
+        <SplashOverlay />
       </SafeAreaProvider>
     </ThemeProvider>
   );
