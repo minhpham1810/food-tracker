@@ -37,7 +37,7 @@ import {
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
 import { parsePrintedDate } from '@/lib/dates';
-import { estimateText, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS } from '@/lib/estimate';
+import { estimate, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS } from '@/lib/estimate';
 import { formatTemperature, useSettings } from '@/lib/settings';
 
 /** Matches the dashboard's cadence so the aging rate tracks new readings. */
@@ -169,6 +169,9 @@ export default function ItemDetailScreen() {
   const printedDays = printed === null ? null : Math.max(0, (printed.getTime() - Date.now()) / 86400000);
 
   const palette = statusColors[item.status];
+  const est = estimate(item);
+  // Same value/label pair as the hero, flattened to one line for running text.
+  const estimateLine = est.value !== null ? `${est.value} ${est.label}` : est.label;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -184,9 +187,28 @@ export default function ItemDetailScreen() {
           <Pill label={item.confidence} {...confidenceColors[item.confidence]} />
         </View>
         <View style={styles.numberRow}>
-          <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
+          {est.value !== null ? (
+            <>
+              <Text style={[styles.number, { color: palette.fg }]}>{est.value}</Text>
+              <Text style={styles.numberUnit}>{est.label}</Text>
+            </>
+          ) : (
+            <Text style={[styles.numberFallback, { color: palette.fg }]}>{est.label}</Text>
+          )}
         </View>
         {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
+        <Text style={styles.statusCopy}>
+          {item.t_eff_incomplete ? item.history_message : statusCopy[item.status]}
+        </Text>
+        <Button
+          title={item.opened ? 'Opened' : 'Mark opened'}
+          disabled={item.opened || pending}
+          onPress={() => void mutate(() => markOpened(item.id))}
+        />
+      </View>
+
+      <Card>
+        <Text style={styles.eyebrow}>WHY THIS NUMBER</Text>
         {/* Current conditions, not a prediction about the food. */}
         <Text
           style={[
@@ -197,31 +219,44 @@ export default function ItemDetailScreen() {
         </Text>
         <Text style={styles.agingRateCaption}>Current fridge conditions, not a forecast</Text>
         <Text style={styles.statusCopy}>
-          assuming continued storage at{' '}
+          Assuming continued storage at{' '}
           {formatTemperature(item.projection_temperature_c, temperatureUnit)}
         </Text>
-        <Text style={styles.footnote}>Profile: {item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
-        <Text style={styles.footnote}>Tracking started: {new Date(item.created_at * 1000).toLocaleString()}</Text>
         {item.estimate_message && <Text style={styles.statusCopy}>{item.estimate_message}</Text>}
-        <Text style={styles.statusCopy}>
-          {item.t_eff_incomplete ? item.history_message : statusCopy[item.status]}
-        </Text>
         {printedDays !== null && (
           <Text style={styles.comparison}>
-            Printed date: {printedDays.toFixed(0)} days | Our estimate: {estimateText(item)}
+            Printed date: {printedDays.toFixed(0)} days · Our estimate: {estimateLine}
           </Text>
         )}
+      </Card>
+
+      <Card>
+        <Text style={styles.eyebrow}>HOW THIS IS CALCULATED</Text>
+        <View style={styles.trackRow}>
+          <Text style={styles.trackLabel}>Profile</Text>
+          <Text style={styles.trackValue}>{item.profile_name}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.trackRow}>
+          <Text style={styles.trackLabel}>D0 source</Text>
+          <Text style={styles.trackValue}>{item.d0_source}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.trackRow}>
+          <Text style={styles.trackLabel}>Q10 source</Text>
+          <Text style={styles.trackValue}>{item.q10_source}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.trackRow}>
+          <Text style={styles.trackLabel}>Tracking started</Text>
+          <Text style={styles.trackValue}>{new Date(item.created_at * 1000).toLocaleString()}</Text>
+        </View>
         {item.placeholder_profile && (
           <View style={styles.badgeRow}>
             <Pill label="Demo coefficients" fg={colors.textDim} border={colors.borderStrong} />
           </View>
         )}
-        <Button
-          title={item.opened ? 'Opened' : 'Mark opened'}
-          disabled={item.opened || pending}
-          onPress={() => void mutate(() => markOpened(item.id))}
-        />
-      </View>
+      </Card>
 
       {item.fusion_uncertainty.used_for_estimate ? <Card>
         <Text style={styles.eyebrow}>EXPERIMENTAL FUSION ENABLED</Text>
@@ -366,6 +401,9 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 16,
     paddingBottom: spacing.sm,
   },
+  // A status word (no figure) never goes through the 52pt display type --
+  // that size is tuned for one or two digits.
+  numberFallback: { fontSize: fontSize.xl, fontWeight: '800' },
   agingRate: {
     color: colors.text,
     fontSize: fontSize.lg,

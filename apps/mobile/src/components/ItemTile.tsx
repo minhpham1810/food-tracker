@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FreshnessBar } from './FreshnessBar';
 import { itemMeta } from './ItemRow';
 import { itemPhotoUrl } from '@/lib/api';
-import { formatTemperature, useSettings } from '@/lib/settings';
 import {
   fontSize,
   radius,
@@ -16,7 +15,7 @@ import {
   type ThemeColors,
 } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
-import { estimateText } from '@/lib/estimate';
+import { estimate } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
@@ -32,9 +31,9 @@ interface Props {
 export function ItemTile({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
-  const { temperatureUnit } = useSettings();
   const palette = statusColors[item.status];
   const meta = itemMeta(item);
+  const { value, label } = estimate(item);
 
   // Link asChild clones its single child, and expo-router rejects a style ARRAY
   // on that child -- flatten it into one object first.
@@ -62,14 +61,22 @@ export function ItemTile({ item, highlighted = false }: Props) {
             // On a photo the number needs its own backdrop, and `bar` rather than
             // `fg`: `fg` is tuned to read on a card, not on a dark scrim.
             <View style={styles.scrim}>
-              <Text style={[styles.scrimNumber, { color: palette.bar }]}>
-                {estimateText(item)}
-              </Text>
+              {value !== null ? (
+                <View style={styles.scrimRow}>
+                  <Text style={[styles.scrimNumber, { color: palette.bar }]}>{value}</Text>
+                  <Text style={styles.scrimUnit}>{label}</Text>
+                </View>
+              ) : (
+                <Text style={[styles.scrimNumber, { color: palette.bar }]}>{label}</Text>
+              )}
+            </View>
+          ) : value !== null ? (
+            <View style={styles.numberRow}>
+              <Text style={[styles.number, { color: palette.fg }]}>{value}</Text>
+              <Text style={styles.numberUnit}>{label}</Text>
             </View>
           ) : (
-            <>
-              <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
-            </>
+            <Text style={[styles.statusWord, { color: palette.fg }]}>{label}</Text>
           )}
         </View>
 
@@ -81,13 +88,6 @@ export function ItemTile({ item, highlighted = false }: Props) {
             {meta ?? ' '}
           </Text>
           {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
-          <Text style={styles.meta}>
-            assuming continued storage at{' '}
-            {formatTemperature(item.projection_temperature_c, temperatureUnit)}
-          </Text>
-          <Text style={styles.meta}>{item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
-          <Text style={styles.meta}>Tracked since {new Date(item.created_at * 1000).toLocaleDateString()}</Text>
-          {(item.history_message || item.estimate_message) && <Text style={styles.meta}>{item.history_message || item.estimate_message}</Text>}
         </View>
       </Pressable>
     </Link>
@@ -119,7 +119,10 @@ const makeStyles = (colors: ThemeColors) =>
     height: 7,
     borderRadius: radius.pill,
   },
+  numberRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: spacing.xs },
   number: { fontSize: 22, fontWeight: '800', letterSpacing: -1, textAlign: 'center' },
+  numberUnit: { color: colors.textMuted, fontSize: fontSize.xs, paddingBottom: 3 },
+  statusWord: { fontSize: fontSize.sm, fontWeight: '700', textAlign: 'center', paddingHorizontal: spacing.sm },
   // Fixed black/white: this sits on the photo, not on a themed surface.
   scrim: {
     position: 'absolute',
@@ -130,9 +133,9 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
+  scrimRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
   scrimNumber: { fontSize: fontSize.lg, fontWeight: '800', letterSpacing: -0.4 },
-  scrimUnit: { color: '#FBF5E3', fontSize: fontSize.xs, fontWeight: '600' },
-  numberUnit: { color: colors.textMuted, fontSize: fontSize.xs },
+  scrimUnit: { color: '#FBF5E3', fontSize: fontSize.xs, fontWeight: '600', paddingBottom: 2 },
   footer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs, gap: 2 },
   name: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   meta: { color: colors.textDim, fontSize: fontSize.xs },

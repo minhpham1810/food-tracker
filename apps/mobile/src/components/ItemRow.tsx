@@ -4,10 +4,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FreshnessBar } from './FreshnessBar';
 import { itemPhotoUrl } from '@/lib/api';
-import { formatTemperature, useSettings } from '@/lib/settings';
 import { fontSize, radius, spacing, useStyles, useTheme, type ThemeColors } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
-import { estimateText } from '@/lib/estimate';
+import { estimate } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
@@ -30,9 +29,9 @@ export function itemMeta(item: ItemState): string | null {
 export function ItemRow({ item, highlighted = false }: Props) {
   const styles = useStyles(makeStyles);
   const { statusColors } = useTheme();
-  const { temperatureUnit } = useSettings();
   const palette = statusColors[item.status];
   const meta = itemMeta(item);
+  const { value, label } = estimate(item);
 
   return (
     <Link href={{ pathname: '/items/[id]', params: { id: item.id } }} asChild>
@@ -74,18 +73,20 @@ export function ItemRow({ item, highlighted = false }: Props) {
             </Text>
           )}
           {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
-          <Text style={styles.meta}>
-            assuming continued storage at{' '}
-            {formatTemperature(item.projection_temperature_c, temperatureUnit)}
-          </Text>
-          <Text style={styles.meta}>{item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
-          <Text style={styles.meta}>Tracked since {new Date(item.created_at * 1000).toLocaleDateString()}</Text>
-          {(item.history_message || item.estimate_message) && <Text style={styles.meta}>{item.history_message || item.estimate_message}</Text>}
         </View>
 
-        <Text style={[styles.days, { color: palette.fg }]}>
-          {estimateText(item)}
-        </Text>
+        <View style={styles.trailing}>
+          {value !== null ? (
+            <>
+              <Text style={[styles.days, { color: palette.fg }]}>{value}</Text>
+              <Text style={styles.daysUnit}>{label}</Text>
+            </>
+          ) : (
+            <Text style={[styles.daysStatus, { color: palette.fg }]} numberOfLines={2}>
+              {label}
+            </Text>
+          )}
+        </View>
       </Pressable>
     </Link>
   );
@@ -121,6 +122,9 @@ const makeStyles = (colors: ThemeColors) =>
   body: { flex: 1, gap: 2 },
   name: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
   meta: { color: colors.textDim, fontSize: fontSize.xs },
+  // Caps the trailing block so a long status word can't squeeze the name column.
+  trailing: { alignItems: 'flex-end', maxWidth: 84 },
   days: { fontSize: fontSize.lg, fontWeight: '700' },
   daysUnit: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textDim },
+  daysStatus: { fontSize: fontSize.sm, fontWeight: '700', textAlign: 'right' },
 });

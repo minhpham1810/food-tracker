@@ -1,8 +1,24 @@
 import type { ItemState } from './types';
 
-export function estimateText(item: ItemState): string {
-  if (item.outside_model_range) return 'outside modelled range';
-  return dayBudgetText(item.days_left);
+/** The value/label split display type needs -- see `estimate` and `dayBudget`. */
+export interface Estimate {
+  /** The figure to set at display size. null when there is no number to show. */
+  value: string | null;
+  /** Small label beside the value; carries the whole phrase when value is null. */
+  label: string;
+}
+
+export function estimate(item: ItemState): Estimate {
+  if (item.outside_model_range) return { value: null, label: 'Outside modelled range' };
+  return dayBudget(item.days_left);
+}
+
+export function dayBudget(days: number): Estimate {
+  if (days <= 0) return { value: null, label: 'Past budget' };
+  if (days < 1) return { value: '<1', label: 'day left' };
+  // Round down so display rounding never adds available time.
+  const whole = Math.floor(days);
+  return { value: String(whole), label: whole === 1 ? 'day left' : 'days left' };
 }
 
 export function dayBudgetText(days: number): string {
