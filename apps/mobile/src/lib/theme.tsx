@@ -16,42 +16,43 @@ import { Platform, useColorScheme, type ViewStyle } from 'react-native';
 import type { ItemState } from './types';
 
 const darkColors = {
-  // Surfaces -- near-black with a cool undertone, so the accent colors read as
-  // deliberate rather than as "the only color on screen".
-  bg: '#0A0E14',
-  surface: '#121821',
-  surfaceRaised: '#18202B',
-  inputBg: '#0D131B',
+  // Surfaces -- the brand ink (#2A2100) taken down to near-black. Warm, so the
+  // yellow mark in the app icon looks like it came from the same tin of paint.
+  bg: '#14110A',
+  surface: '#1E1A0F',
+  surfaceRaised: '#292314',
+  inputBg: '#171308',
 
   // Lines: hairlines, not boxes. Borders here are felt more than seen.
-  border: '#1E2733',
-  borderStrong: '#2C3846',
+  border: '#332C1B',
+  borderStrong: '#473D26',
 
   // Text
-  text: '#F2F5F9',
-  textMuted: '#94A3B4',
-  textDim: '#64748B',
+  text: '#FBF5E3',
+  textMuted: '#BCAE8B',
+  textDim: '#8D815F',
 
-  // Interactive
-  accent: '#38BDF8',
-  accentText: '#7DD3FC',
-  codeText: '#A5C9E8',
-  buttonBg: '#17324D',
-  buttonBorder: '#2E6491',
-  buttonSecondaryBg: '#161E28',
-  buttonSecondaryBorder: '#2C3846',
-  chipSelectedBg: '#14304C',
-  chipSelectedBorder: '#2E6491',
+  // Interactive -- brand yellow.
+  accent: '#FFD93D',
+  accentText: '#FFD93D',
+  codeText: '#F0CE7A',
+  buttonBg: '#4A3A0C',
+  buttonBorder: '#7A5F14',
+  buttonSecondaryBg: '#201B10',
+  buttonSecondaryBorder: '#473D26',
+  chipSelectedBg: '#4A3A0C',
+  chipSelectedBorder: '#C99B1E',
 
-  // Feedback
+  // Feedback. `warning` is orange, not amber: amber is now the brand's own
+  // color and would read as chrome rather than as a warning.
   danger: '#F87171',
-  dangerBg: '#2A1618',
-  dangerBorder: '#6E3438',
-  warning: '#FBBF24',
-  warningBg: '#2A2212',
-  warningBorder: '#6E5720',
+  dangerBg: '#2C1512',
+  dangerBorder: '#6E3A32',
+  warning: '#FB923C',
+  warningBg: '#2E1D0C',
+  warningBorder: '#6E4820',
   info: '#93C5FD',
-  infoBg: '#141D2B',
+  infoBg: '#16202B',
   infoBorder: '#2F4C74',
 };
 
@@ -63,34 +64,36 @@ export type ThemeColors = typeof darkColors;
  * them, exactly as `text` reads on the dark theme's dark fills.
  */
 const lightColors: ThemeColors = {
-  bg: '#F4F6F9',
+  bg: '#FFF8E1',
   surface: '#FFFFFF',
-  surfaceRaised: '#EDF1F6',
+  surfaceRaised: '#FFF2C9',
   inputBg: '#FFFFFF',
 
-  border: '#E2E8F0',
-  borderStrong: '#CBD5E1',
+  border: '#EFE2B4',
+  borderStrong: '#DCC886',
 
-  text: '#0F172A',
-  textMuted: '#475569',
-  textDim: '#64748B',
+  text: '#2A2100',
+  textMuted: '#6A5C2C',
+  textDim: '#8A7B48',
 
-  accent: '#0284C7',
-  accentText: '#0369A1',
-  codeText: '#1D4ED8',
-  buttonBg: '#DBEAFE',
-  buttonBorder: '#93C5FD',
+  // Brand yellow is a fill here, never text: on white it fails contrast, so
+  // anything that has to be *read* uses the deep gold instead.
+  accent: '#B26E00',
+  accentText: '#8F5A00',
+  codeText: '#7A4E00',
+  buttonBg: '#FFD93D',
+  buttonBorder: '#E0B01E',
   buttonSecondaryBg: '#FFFFFF',
-  buttonSecondaryBorder: '#CBD5E1',
-  chipSelectedBg: '#DBEAFE',
-  chipSelectedBorder: '#60A5FA',
+  buttonSecondaryBorder: '#DCC886',
+  chipSelectedBg: '#FFE98F',
+  chipSelectedBorder: '#E0B01E',
 
   danger: '#DC2626',
   dangerBg: '#FEF2F2',
   dangerBorder: '#FCA5A5',
-  warning: '#B45309',
-  warningBg: '#FFFBEB',
-  warningBorder: '#FCD34D',
+  warning: '#C2410C',
+  warningBg: '#FFF4E8',
+  warningBorder: '#FDBA74',
   info: '#1D4ED8',
   infoBg: '#EFF6FF',
   infoBorder: '#93C5FD',
@@ -115,7 +118,7 @@ export type StatusColors = Record<ItemState['status'], StatusPalette>;
 
 const darkStatusColors: StatusColors = {
   fresh: { fg: '#4ADE80', bar: '#4ADE80', border: '#2C6E45', wash: 'rgba(74, 222, 128, 0.09)' },
-  check_early: { fg: '#FBBF24', bar: '#FBBF24', border: '#6E5720', wash: 'rgba(251, 191, 36, 0.10)' },
+  check_early: { fg: '#FDBA74', bar: '#FB923C', border: '#7A4820', wash: 'rgba(251, 146, 60, 0.10)' },
   past_budget_quiet: {
     fg: '#93C5FD',
     bar: '#60A5FA',
@@ -134,7 +137,7 @@ const darkStatusColors: StatusColors = {
 // while `fg` is text on a near-white card and has to be read.
 const lightStatusColors: StatusColors = {
   fresh: { fg: '#15803D', bar: '#22C55E', border: '#86EFAC', wash: 'rgba(34, 197, 94, 0.10)' },
-  check_early: { fg: '#B45309', bar: '#F59E0B', border: '#FCD34D', wash: 'rgba(245, 158, 11, 0.12)' },
+  check_early: { fg: '#C2410C', bar: '#F97316', border: '#FDBA74', wash: 'rgba(249, 115, 22, 0.12)' },
   past_budget_quiet: {
     fg: '#1D4ED8',
     bar: '#3B82F6',
@@ -157,13 +160,13 @@ export type ConfidenceColors = Record<ItemState['confidence'], { fg: string; bor
 
 const darkConfidenceColors: ConfidenceColors = {
   high: { fg: '#4ADE80', border: '#2C6E45' },
-  med: { fg: '#FBBF24', border: '#6E5720' },
+  med: { fg: '#FDBA74', border: '#7A4820' },
   low: { fg: '#F87171', border: '#6E3438' },
 };
 
 const lightConfidenceColors: ConfidenceColors = {
   high: { fg: '#15803D', border: '#86EFAC' },
-  med: { fg: '#B45309', border: '#FCD34D' },
+  med: { fg: '#C2410C', border: '#FDBA74' },
   low: { fg: '#B91C1C', border: '#FCA5A5' },
 };
 

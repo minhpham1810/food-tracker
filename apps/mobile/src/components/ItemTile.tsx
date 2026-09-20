@@ -123,7 +123,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: spacing.xs,
   },
   scrimNumber: { fontSize: fontSize.lg, fontWeight: '800', letterSpacing: -0.4 },
-  scrimUnit: { color: '#F2F5F9', fontSize: fontSize.xs, fontWeight: '600' },
+  scrimUnit: { color: '#FBF5E3', fontSize: fontSize.xs, fontWeight: '600' },
   numberUnit: { color: colors.textMuted, fontSize: fontSize.xs },
   footer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs, gap: 2 },
   name: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
