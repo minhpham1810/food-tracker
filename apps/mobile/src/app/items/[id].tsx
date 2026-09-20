@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,7 +37,10 @@ import {
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
 import { parsePrintedDate } from '@/lib/dates';
-import { estimateText, dayBudgetText } from '@/lib/estimate';
+import { estimateText, dayBudgetText, agingRateText, AGING_RATE_EMPHASIS } from '@/lib/estimate';
+
+/** Matches the dashboard's cadence so the aging rate tracks new readings. */
+const ITEM_POLL_INTERVAL_MS = 3000;
 
 const statusCopy: Record<ItemState['status'], string> = {
   fresh: 'Tracks aligned with the temperature-history forecast.',
@@ -93,6 +96,23 @@ export default function ItemDetailScreen() {
       .then(setProfiles)
       .catch(() => setProfiles([]));
   }, [load]);
+
+  // The aging rate reflects the newest reading, so this screen polls like the
+  // dashboard. Unlike load() it leaves draftName alone, so a rename in
+  // progress is not overwritten, and it stands down during a mutation.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (pendingRef.current) return;
+      getItem(id)
+        .then(setItem)
+        .catch(() => {
+          /* Keep the last good reading; load() owns error reporting. */
+        });
+    }, ITEM_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [id]);
 
   /** Every mutation endpoint returns the updated ItemState, so adopt the response. */
   const mutate = async (action: () => Promise<ItemState>) => {
@@ -165,6 +185,15 @@ export default function ItemDetailScreen() {
           <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
         </View>
         {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
+        {/* Current conditions, not a prediction about the food. */}
+        <Text
+          style={[
+            styles.agingRate,
+            item.aging_rate != null && item.aging_rate >= AGING_RATE_EMPHASIS && styles.agingRateHot,
+          ]}>
+          {agingRateText(item.aging_rate)}
+        </Text>
+        <Text style={styles.agingRateCaption}>Current fridge conditions, not a forecast</Text>
         <Text style={styles.statusCopy}>assuming continued storage at {item.projection_temperature_c}C</Text>
         <Text style={styles.footnote}>Profile: {item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
         <Text style={styles.footnote}>Tracking started: {new Date(item.created_at * 1000).toLocaleString()}</Text>
@@ -332,6 +361,16 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 16,
     paddingBottom: spacing.sm,
   },
+  agingRate: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    marginTop: spacing.sm,
+  },
+  // Warm fridge: larger and amber, so it reads at a glance from a distance.
+  agingRateHot: { color: colors.warning, fontSize: fontSize.xl, fontWeight: '800' },
+  agingRateCaption: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },
   statusCopy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   comparison: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   badgeRow: { flexDirection: 'row' },

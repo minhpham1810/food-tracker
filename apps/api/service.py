@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import numpy as np
 
-from engine.burn import days_left, freshness_fraction, update_budget, in_model_range, PROJECTION_TEMPERATURE_C
+from engine.burn import (days_left, freshness_fraction, update_budget, in_model_range,
+                        current_aging_rate, AGING_RATE_REFERENCE_Q10, PROJECTION_TEMPERATURE_C)
 from engine.conditioning import condition_samples, gas_baseline_samples
 from engine.fusion import FusionUncertainty, fuse, load_fusion_uncertainty
 from engine.gas import fit_gas_baseline, gas_anomaly
@@ -54,6 +55,9 @@ class ItemState:
     q10_source: str
     projection_temperature_c: float
     estimate_message: str | None
+    # Current conditions, not a prediction: how fast this item is aging right
+    # now versus 4C. None when the reading is missing, stale or out of range.
+    aging_rate: float | None
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,9 @@ class TelemetryState:
     baseline_residual_sigma: float | None
     reading_age_seconds: float | None
     connected: bool
+    # Fridge-level aging rate at the reference Q10; None when unavailable.
+    aging_rate: float | None
+    aging_rate_reference_q10: float
 
 
 @dataclass(frozen=True)
@@ -82,7 +89,8 @@ class FreshnessService:
     def __init__(
         self,
         store: AppStore | None = None,
-        seed_hero_items: bool = True,
+        # Off by default: the app must never invent items the user did not add.
+        seed_hero_items: bool = False,
         storage_path: str | None = None,
         calibration_path: str | None = None,
         experimental_fusion: bool | None = None,
@@ -334,6 +342,7 @@ class FreshnessService:
         gas_score = self._latest_gas_anomaly()
         latest = self.store.latest_telemetry
         age = max(0.0, time.time() - latest.timestamp) if latest else None
+        connected = age is not None and age <= STALE_AFTER_SECONDS
         telemetry = TelemetryState(
             timestamp=latest.timestamp if latest else None,
             temperature=latest.temperature if latest else None,
@@ -344,7 +353,11 @@ class FreshnessService:
             baseline_residual_sigma=(self.store.gas_baseline.baseline_residual_sigma
                                      if self.store.gas_baseline else None),
             reading_age_seconds=age,
-            connected=age is not None and age <= STALE_AFTER_SECONDS,
+            connected=connected,
+            aging_rate=current_aging_rate(
+                latest.temperature if latest is not None and connected else None,
+                AGING_RATE_REFERENCE_Q10),
+            aging_rate_reference_q10=AGING_RATE_REFERENCE_Q10,
         )
         items = sorted(
             (self._item_state(item, gas_score) for item in self.store.items.values()),
@@ -459,6 +472,9 @@ class FreshnessService:
             d0_source=profile.source,
             q10_source=profile.q10_source or "placeholder",
             projection_temperature_c=PROJECTION_TEMPERATURE_C,
+            # A stale reading must not be presented as the current rate.
+            aging_rate=current_aging_rate(
+                latest.temperature if latest is not None and not stale else None, profile.q10),
             estimate_message=("Readings missing or stale — estimate may be optimistic" if stale
                 else f"data gap: {self.store.data_gap_hours:.0f}h — estimate may be optimistic"
                 if self.store.data_gap_hours > 0 else None),

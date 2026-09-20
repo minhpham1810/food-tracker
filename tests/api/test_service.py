@@ -1,3 +1,7 @@
+import time
+
+import pytest
+
 from apps.api.service import FreshnessService
 from engine.models import TelemetrySample
 
@@ -200,3 +204,31 @@ def test_warm_fridge_alert_has_no_demo_milk_cost():
     codes = {alert.code for alert in state.alerts}
     assert "warm_fridge" in codes
     assert "excursion_damage" not in codes
+
+
+def test_aging_rate_is_exposed_and_tracks_the_latest_reading():
+    service = FreshnessService(seed_hero_items=False)
+    service.add_item("dairy")
+    # Timestamps must be recent, or the reading counts as stale and is withheld.
+    now = time.time()
+    service.ingest(TelemetrySample(now, 4.0, 60.0, None, False))
+    assert service.snapshot().items[0].aging_rate == pytest.approx(1.0)
+    # A warmer reading raises the rate immediately, without days_left moving much.
+    service.ingest(TelemetrySample(now + 60, 22.0, 60.0, None, False))
+    state = service.snapshot()
+    assert state.items[0].aging_rate == pytest.approx(2.7 ** 1.8)
+    assert state.telemetry.aging_rate == pytest.approx(2.7 ** 1.8)
+    assert state.telemetry.aging_rate_reference_q10 == 2.7
+
+
+def test_aging_rate_is_withheld_when_the_reading_is_stale(monkeypatch):
+    """A stale reading must not be presented as the current rate."""
+    service = FreshnessService(seed_hero_items=False)
+    service.add_item("dairy")
+    now = time.time()
+    service.ingest(TelemetrySample(now, 22.0, 60.0, None, False))
+    monkeypatch.setattr("apps.api.service.time.time", lambda: now + 10_000)
+    state = service.snapshot()
+    assert state.telemetry.connected is False
+    assert state.items[0].aging_rate is None
+    assert state.telemetry.aging_rate is None

@@ -97,6 +97,8 @@ class TelemetryOut(BaseModel):
     baseline_residual_sigma: float | None
     reading_age_seconds: float | None
     connected: bool
+    aging_rate: float | None = None
+    aging_rate_reference_q10: float = 2.7
 
 
 class FusionUncertaintyOut(BaseModel):
@@ -138,6 +140,7 @@ class ItemOut(BaseModel):
     profile_name: str
     d0_source: str
     q10_source: str
+    aging_rate: float | None = None
     projection_temperature_c: float
     estimate_message: str | None
 
