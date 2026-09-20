@@ -13,9 +13,11 @@ def client(monkeypatch, tmp_path):
     # isolated service needs an inventory of its own.
     service.add_item("dairy", "Milk")
     monkeypatch.setattr(main, "service", service)
+    demo = FreshnessService()
+    monkeypatch.setattr(main, "demo_service", demo)
     monkeypatch.setattr(
         main, "simulator",
-        SensorSimulator(service.ingest, service.reset_demo_state, service.store),
+        SensorSimulator(demo.ingest, demo.reset_demo_state, demo.store),
     )
     monkeypatch.setenv("FRESHNESS_DATA_DIR", str(tmp_path))
     with TestClient(main.app) as session:
@@ -50,3 +52,16 @@ def test_invalid_replay_preserves_inventory_state(client, tmp_path):
     assert client.post("/api/demo/replay", json={"path": "bad.csv"}).status_code == 400
     assert client.post("/api/demo/replay", json={"path": "missing.csv"}).status_code == 404
     assert client.get("/api/state").json() == before
+
+
+def test_demo_reset_and_replay_cannot_change_live_inventory(client, tmp_path):
+    client.post('/api/items', json={'profile_id': 'eggs', 'name': 'Real eggs'})
+    client.post('/api/telemetry', json={'timestamp': 100, 'temperature': 4,
+                'humidity': 60, 'gas_resistance': 200000})
+    before = client.get('/api/items').json()
+    assert client.post('/api/demo/reset').status_code == 200
+    (tmp_path / 'demo.csv').write_text('Minute,MQ135,Temperature,Humidity\n0,200000,4,60\n1,200000,22,60\n')
+    assert client.post('/api/demo/replay', json={'path': 'demo.csv'}).status_code == 200
+    assert client.get('/api/items').json() == before
+    assert main.service.store.latest_telemetry.timestamp == 100
+    assert main.demo_service.store.latest_telemetry.timestamp == 60

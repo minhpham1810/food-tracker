@@ -15,6 +15,7 @@ import {
   type ThemeColors,
 } from '@/lib/theme';
 import type { ItemState } from '@/lib/types';
+import { estimateText } from '@/lib/estimate';
 
 interface Props {
   item: ItemState;
@@ -60,14 +61,12 @@ export function ItemTile({ item, highlighted = false }: Props) {
             // `fg`: `fg` is tuned to read on a card, not on a dark scrim.
             <View style={styles.scrim}>
               <Text style={[styles.scrimNumber, { color: palette.bar }]}>
-                {item.days_left.toFixed(1)}
-                <Text style={styles.scrimUnit}> days left</Text>
+                {estimateText(item)}
               </Text>
             </View>
           ) : (
             <>
-              <Text style={[styles.number, { color: palette.fg }]}>{item.days_left.toFixed(1)}</Text>
-              <Text style={styles.numberUnit}>days left</Text>
+              <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
             </>
           )}
         </View>
@@ -79,7 +78,11 @@ export function ItemTile({ item, highlighted = false }: Props) {
           <Text style={styles.meta} numberOfLines={1}>
             {meta ?? ' '}
           </Text>
-          <FreshnessBar daysLeft={item.days_left} status={item.status} />
+          {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
+          <Text style={styles.meta}>assuming continued storage at {item.projection_temperature_c}C</Text>
+          <Text style={styles.meta}>{item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
+          <Text style={styles.meta}>Tracked since {new Date(item.created_at * 1000).toLocaleDateString()}</Text>
+          {(item.history_message || item.estimate_message) && <Text style={styles.meta}>{item.history_message || item.estimate_message}</Text>}
         </View>
       </Pressable>
     </Link>
@@ -111,7 +114,7 @@ const makeStyles = (colors: ThemeColors) =>
     height: 7,
     borderRadius: radius.pill,
   },
-  number: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
+  number: { fontSize: 22, fontWeight: '800', letterSpacing: -1, textAlign: 'center' },
   // Fixed black/white: this sits on the photo, not on a themed surface.
   scrim: {
     position: 'absolute',

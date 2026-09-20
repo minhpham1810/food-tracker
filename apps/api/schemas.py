@@ -10,6 +10,7 @@ class TelemetryIn(BaseModel):
     gas_resistance: float = Field(gt=0)
     # Optional: the live BME688 sensor has no door switch.
     door_open: bool = False
+    iaq_accuracy: int | None = Field(default=None, ge=0, le=3)
 
 
 class ItemCreate(BaseModel):
@@ -36,6 +37,8 @@ class ProfileOut(BaseModel):
     opened_d0_days: float
     q10: float
     placeholder: bool
+    source: str
+    q10_source: str | None = None
     advice: str
 
 
@@ -53,6 +56,7 @@ class OCRResultOut(BaseModel):
 
 
 class OCRConfirmIn(BaseModel):
+    category_confirmed: bool = False
     profile_id: str
     scan_id: str | None = None
     name: str | None = None
@@ -89,6 +93,19 @@ class TelemetryOut(BaseModel):
     humidity: float | None
     gas_resistance: float | None
     gas_anomaly: float | None
+    iaq_accuracy: int | None
+    baseline_residual_sigma: float | None
+    reading_age_seconds: float | None
+    connected: bool
+
+
+class FusionUncertaintyOut(BaseModel):
+    used_for_estimate: bool
+    sigma_a: float
+    sigma_b: float
+    sigma_a_source: str
+    sigma_b_source: str
+    sigma_b_reason: str
 
 
 class ItemOut(BaseModel):
@@ -112,6 +129,17 @@ class ItemOut(BaseModel):
     package_size: str | None = None
     lot_code: str | None = None
     has_photo: bool = False
+    data_gap_hours: float = 0.0
+    fusion_uncertainty: FusionUncertaintyOut
+    t_eff_incomplete: bool
+    history_message: str | None
+    outside_model_range: bool
+    model_message: str | None
+    profile_name: str
+    d0_source: str
+    q10_source: str
+    projection_temperature_c: float
+    estimate_message: str | None
 
 
 class AppStateOut(BaseModel):

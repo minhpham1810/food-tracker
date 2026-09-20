@@ -36,6 +36,8 @@ import {
   type ThemeColors,
 } from '@/lib/theme';
 import type { FoodProfile, ItemState } from '@/lib/types';
+import { parsePrintedDate } from '@/lib/dates';
+import { estimateText, dayBudgetText } from '@/lib/estimate';
 
 const statusCopy: Record<ItemState['status'], string> = {
   fresh: 'Tracks aligned with the temperature-history forecast.',
@@ -140,6 +142,10 @@ export default function ItemDetailScreen() {
     );
   }
 
+  // Comparison only: the printed date never enters the freshness calculation.
+  const printed = parsePrintedDate(item.printed_date);
+  const printedDays = printed === null ? null : Math.max(0, (printed.getTime() - Date.now()) / 86400000);
+
   const palette = statusColors[item.status];
 
   return (
@@ -156,11 +162,21 @@ export default function ItemDetailScreen() {
           <Pill label={item.confidence} {...confidenceColors[item.confidence]} />
         </View>
         <View style={styles.numberRow}>
-          <Text style={[styles.number, { color: palette.fg }]}>{item.days_left.toFixed(1)}</Text>
-          <Text style={styles.numberUnit}>days{'\n'}left</Text>
+          <Text style={[styles.number, { color: palette.fg }]}>{estimateText(item)}</Text>
         </View>
-        <FreshnessBar daysLeft={item.days_left} status={item.status} />
-        <Text style={styles.statusCopy}>{statusCopy[item.status]}</Text>
+        {!item.outside_model_range && <FreshnessBar daysLeft={item.days_left} status={item.status} />}
+        <Text style={styles.statusCopy}>assuming continued storage at {item.projection_temperature_c}C</Text>
+        <Text style={styles.footnote}>Profile: {item.profile_name} · D0: {item.d0_source} · Q10: {item.q10_source}</Text>
+        <Text style={styles.footnote}>Tracking started: {new Date(item.created_at * 1000).toLocaleString()}</Text>
+        {item.estimate_message && <Text style={styles.statusCopy}>{item.estimate_message}</Text>}
+        <Text style={styles.statusCopy}>
+          {item.t_eff_incomplete ? item.history_message : statusCopy[item.status]}
+        </Text>
+        {printedDays !== null && (
+          <Text style={styles.comparison}>
+            Printed date: {printedDays.toFixed(0)} days | Our estimate: {estimateText(item)}
+          </Text>
+        )}
         {item.placeholder_profile && (
           <View style={styles.badgeRow}>
             <Pill label="Demo coefficients" fg={colors.textDim} border={colors.borderStrong} />
@@ -173,12 +189,12 @@ export default function ItemDetailScreen() {
         />
       </View>
 
-      <Card>
-        <Text style={styles.eyebrow}>TRACK AGREEMENT</Text>
+      {item.fusion_uncertainty.used_for_estimate ? <Card>
+        <Text style={styles.eyebrow}>EXPERIMENTAL FUSION ENABLED</Text>
 
         <View style={styles.trackRow}>
           <Text style={styles.trackLabel}>Track A · temperature + time</Text>
-          <Text style={styles.trackValue}>{item.track_a_days_left.toFixed(1)} days</Text>
+          <Text style={styles.trackValue}>{item.outside_model_range ? item.model_message : dayBudgetText(item.track_a_days_left)}</Text>
         </View>
         <View style={styles.divider} />
 
@@ -212,6 +228,11 @@ export default function ItemDetailScreen() {
           it. Scoring the label is manual — this is not food-image analysis.
         </Text>
       </Card>
+
+      : <Card>
+        <Text style={styles.eyebrow}>TEMPERATURE + TIME ESTIMATE</Text>
+        <Text style={styles.footnote}>Fridge gas is experimental and does not change this item's estimate. Fusion weights and calibration uncertainty are unused.</Text>
+      </Card>}
 
       <Card>
         <Text style={styles.eyebrow}>CORRECT THIS ITEM</Text>
@@ -312,6 +333,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: spacing.sm,
   },
   statusCopy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
+  comparison: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   badgeRow: { flexDirection: 'row' },
 
   eyebrow: { ...eyebrow, color: colors.textDim },

@@ -12,7 +12,7 @@ const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8010/
  * and no item created. Abort instead, so callers get a failure they can show.
  */
 const REQUEST_TIMEOUT_MS = 12000;
-const OCR_REQUEST_TIMEOUT_MS = 130000;
+const OCR_REQUEST_TIMEOUT_MS = 15000;
 // The assistant runs a tool-calling loop of up to 4 rounds against a local model,
 // so a question that touches tools takes far longer than a plain CRUD call.
 const ASSISTANT_TIMEOUT_MS = 120000;
@@ -155,7 +155,7 @@ export async function ocrScan(photoUris: string[]): Promise<OCRResult> {
     return (await response.json()) as OCRResult;
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error('Qwen did not finish the scan within 130 seconds.');
+      throw new Error('OCR timed out after 15 seconds. Enter the item manually.');
     }
     throw error;
   } finally {
@@ -169,6 +169,7 @@ export async function ocrScan(photoUris: string[]): Promise<OCRResult> {
  * before it becomes an item, because OCR routinely misreads real labels.
  */
 export interface OCRConfirmPayload {
+  category_confirmed: boolean;
   profile_id: string;
   /** From the scan response; makes the backend keep that photo as the thumbnail. */
   scan_id: string | null;

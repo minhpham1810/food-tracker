@@ -1,4 +1,13 @@
-from engine.fusion import fuse
+from engine.fusion import fuse as _fuse
+
+
+def fuse(*args, **kwargs):
+    return _fuse(*args, **kwargs, experimental_enabled=True)
+
+
+def test_default_estimate_ignores_gas_and_label_even_at_extremes():
+    for gas in (None, 0.0, 0.9, 1.0):
+        assert _fuse(6.0, 0.6, gas, 0.0).days_left == 6.0
 
 
 def test_secondary_tracks_never_extend_track_a():
@@ -21,7 +30,7 @@ def test_disagreement_is_surfaced():
 def test_unavailable_secondary_tracks_are_neutral():
     result = fuse(6.0, 0.6, None, None)
     assert result.days_left == 6.0
-    assert result.confidence == "high"
+    assert result.confidence == "med"
 
 
 def test_confidence_bins_follow_spread_thresholds():

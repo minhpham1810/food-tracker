@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 from dataclasses import asdict
 import os
 from pathlib import Path
@@ -34,8 +35,10 @@ from simulator.scenarios import available_scenarios
 from simulator.mendeley_replay import load_mendeley_csv
 from simulator.sensor_sim import SensorSimulator
 
-service = FreshnessService()
-simulator = SensorSimulator(service.ingest, service.reset_demo_state, service.store)
+service = FreshnessService(storage_path=os.environ.get("FRESHNESS_DB_PATH") or None)
+demo_service = FreshnessService(storage_path=(service.store.storage_path + ".demo"
+                                              if service.store.storage_path else None))
+simulator = SensorSimulator(demo_service.ingest, demo_service.reset_demo_state, demo_service.store)
 tool_dispatcher = ToolDispatcher(service)
 llm_gateway = LLMGateway(tool_dispatcher)
 
@@ -44,7 +47,8 @@ llm_gateway = LLMGateway(tool_dispatcher)
 async def lifespan(app: FastAPI):
     # Read at startup rather than import so tests can switch the live feed off.
     config = ThingSpeakConfig.from_env()
-    poller = ThingSpeakPoller(config, service.ingest, service.store) if config else None
+    poller = ThingSpeakPoller(config, service.ingest, service.store,
+                            history_callback=service.restore_complete_history) if config else None
     if poller is not None:
         poller.start()
     yield
@@ -70,6 +74,11 @@ def health() -> dict[str, str]:
 @app.get("/api/state", response_model=AppStateOut)
 def get_state():
     return service.snapshot()
+
+
+@app.get("/api/diagnostics/gas")
+async def gas_diagnostics():
+    return service.gas_diagnostics()
 
 
 @app.post("/api/telemetry", response_model=AppStateOut)
@@ -177,11 +186,13 @@ async def ocr_scan(
     try:
         # Vision inference can take tens of seconds during a cold model load. Keep
         # the event loop free so health, inventory, and telemetry requests continue.
-        result = await run_in_threadpool(ocr_module.scan_images, contents)
+        result = await asyncio.wait_for(run_in_threadpool(ocr_module.scan_images, contents), timeout=15.0)
         # The first photo is the one the user framed at the product, so it is the
         # one worth keeping as the item's thumbnail.
         thumbnail = await run_in_threadpool(ocr_module.thumbnail, contents[0])
         return {**result, "scan_id": service.stash_scan_photo(thumbnail)}
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise HTTPException(status_code=503, detail="OCR timed out after 15 seconds. Enter the item manually.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, ocr_module.VisionOCRError) as exc:
@@ -190,6 +201,8 @@ async def ocr_scan(
 
 @app.post("/api/ocr/confirm", response_model=ItemOut, status_code=201)
 def ocr_confirm(payload: OCRConfirmIn):
+    if not payload.category_confirmed:
+        raise HTTPException(status_code=400, detail="Confirm the food category before adding the item")
     try:
         return service.add_item(
             payload.profile_id,
@@ -232,7 +245,12 @@ async def stop_demo():
 @app.post("/api/demo/reset", response_model=AppStateOut)
 async def reset_demo():
     await simulator.reset()
-    return service.snapshot()
+    return demo_service.snapshot()
+
+
+@app.get("/api/demo/state", response_model=AppStateOut)
+def get_demo_state():
+    return demo_service.snapshot()
 
 
 @app.post("/api/demo/replay", response_model=AppStateOut)
@@ -250,10 +268,10 @@ async def replay_mendeley(payload: ReplayIn):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     await simulator.stop(mark_paused=False)
-    service.reset_demo_state()
-    service.store.active_scenario = "mendeley_replay"
+    demo_service.reset_demo_state()
+    demo_service.store.active_scenario = "mendeley_replay"
     for sample in rows:
-        service.ingest(sample)
-    service.store.active_scenario = None
-    service.store.telemetry_paused = True
-    return service.snapshot()
+        demo_service.ingest(sample)
+    demo_service.store.active_scenario = None
+    demo_service.store.telemetry_paused = True
+    return demo_service.snapshot()

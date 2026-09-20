@@ -20,6 +20,24 @@ export interface ItemState {
   lot_code?: string | null;
   /** True when the item was scanned and the backend kept the label photo. */
   has_photo?: boolean;
+  data_gap_hours?: number;
+  t_eff_incomplete: boolean;
+  history_message: string | null;
+  outside_model_range: boolean;
+  model_message: string | null;
+  profile_name: string;
+  d0_source: string;
+  q10_source: string;
+  projection_temperature_c: number;
+  estimate_message: string | null;
+  fusion_uncertainty: {
+    used_for_estimate: boolean;
+    sigma_a: number;
+    sigma_b: number;
+    sigma_a_source: 'placeholder' | 'fitted';
+    sigma_b_source: 'placeholder' | 'fitted';
+    sigma_b_reason: string;
+  };
 }
 
 /** Mirrors ProfileOut in apps/api/schemas.py -- served from engine/foods.json. */
@@ -31,10 +49,16 @@ export interface FoodProfile {
   q10: number;
   /** Hackathon placeholder coefficients, not validated data. Surface this. */
   placeholder: boolean;
+  source: string;
+  q10_source: string | null;
   advice: string;
 }
 
 export interface TelemetryState {
+  reading_age_seconds: number | null;
+  connected: boolean;
+  iaq_accuracy: number | null;
+  baseline_residual_sigma: number | null;
   timestamp: number | null;
   temperature: number | null;
   humidity: number | null;

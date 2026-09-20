@@ -4,8 +4,15 @@ A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
 telemetry simulator, an Expo mobile app, and a BME688 sensor sketch that uploads to
 ThingSpeak.
 
-This is a waste-reduction prototype, not a food-safety device. Food-profile
-coefficients in `engine/foods.json` are placeholders.
+This is an experimental waste-reduction prototype. Five profiles use USDA FSIS
+storage guidance; four remain placeholders. Days left use recorded temperature exposure and
+project future storage at 4C. Display rounds down to whole days or less than one
+day. Gas is an experimental fridge-level signal with no influence on estimates.
+
+Run only one API worker for one household. There is no account isolation or
+authentication. Do not deploy multiple processes against the same SQLite file:
+each process owns an in-memory snapshot that can overwrite another process.
+Keep the demo on a trusted local network. This limit is documented, not fixed.
 
 ## Current state
 
@@ -20,6 +27,40 @@ coefficients in `engine/foods.json` are placeholders.
 | Assistant | Local OpenAI-compatible tool-calling model (default Ollama `qwen3.5:9b`). It can only act through validated tools and never produces freshness numbers itself. |
 | Hardware | `hardware/sketch.cpp` (Arduino/BSEC2, WiFi) uploads readings to ThingSpeak every 20 s. CAD in `hardware/STL_files/`. The API reads that channel; the board never talks to the API directly. |
 | Not built | Persistence, authentication, shared-fridge gas semantics, model calibration/validation, automated mobile UI tests. |
+
+## Profile provenance
+
+`engine/foods.json` carries a `source` per category. Five categories use
+published guidance; four remain `placeholder` demo coefficients.
+
+**D0 (unopened shelf life at 4C) — USDA FSIS cold storage guidance:**
+
+| Category | FSIS guidance | `d0_days` |
+| --- | --- | --- |
+| Red meat (beef/pork/lamb) | 3-5 days | 4.0 |
+| Poultry | 2 days | 2.0 |
+| Seafood / fish | 2 days | 2.0 |
+| Eggs (in shell) | 3-5 weeks | 28.0 |
+| Dairy (milk) | 5-7 days | 6.0 |
+
+Ground meat also falls under the FSIS 2-day guidance; it is currently folded
+into `red_meat` (4.0 days) rather than split out, so ground cuts are the
+optimistic end of that profile.
+
+**Q10 = 2.7 (`q10_source: fitted-published-multitemp`):** fitted by log-linear
+regression of published chicken sensory shelf-life against storage temperature:
+
+| Temperature | Shelf life (days) |
+| --- | --- |
+| 0 C | 13.33 |
+| 4 C | 9.17 |
+| 10 C | 5.00 |
+| 15 C | 3.00 |
+
+R^2 = 0.9997. The fit is on poultry data and is reused for red meat, seafood
+and dairy as the best available multi-temperature estimate; it is not
+independently validated for those categories. Eggs keep q10 2.0 and the four
+placeholder categories keep their demo values, none of which are fitted.
 
 ## Repository layout
 
@@ -65,6 +106,28 @@ python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8010 --env-file .env
 API docs: <http://localhost:8010/docs>. On Windows, activate with
 `.\.venv\Scripts\Activate.ps1` and use `Copy-Item` instead of `cp`.
 
+The API documentation is at <http://localhost:8010/docs>. Set
+`FRESHNESS_DB_PATH=./data/freshness.sqlite3` in the root `.env` to persist live
+inventory and telemetry. Without this setting, storage is in memory.
+Demo routes use a separate service and `${FRESHNESS_DB_PATH}.demo` database
+(or a separate in-memory store when persistence is not configured).
+The mobile dashboard reads live state; demo state is at `/api/demo/state`.
+
+Keep `ENABLE_EXPERIMENTAL_FUSION=false` for the demo. The legacy gas/label
+weighting and veto code remains behind that opt-in flag. Sigma values and the
+calibration JSON loader are unused when the flag is off; the API reports this.
+`engine/gas_calibrate.py` is NOT FOR REPORTING: its model selection and accuracy
+metrics need correction. Generated artifacts carry `reportable: false` and are
+rejected as sources of fusion uncertainty.
+
+The telemetry buffer retains 10,000 raw readings (about 55 hours at 20 seconds).
+Every accepted reading updates temperature exposure; readings are not downsampled
+for integration. Data older than three minutes is displayed as disconnected.
+Exposure outside -1C through 25C stops integration for that interval and leaves a
+persisted warning. The UI withholds the estimate because that exposure is unknown.
+Category changes replay retained temperatures using the new Q10. If accrued
+exposure predates retained history, the API refuses the category change.
+
 Key `.env` values (see `.env.example` for all):
 
 | Variable | Purpose |
@@ -75,6 +138,10 @@ Key `.env` values (see `.env.example` for all):
 | `FRESHNESS_DATA_DIR` | Where CSV replay files live (default `./data`) |
 
 `apps/api/config.py` loads the root `.env` on import; real environment variables win.
+Qwen requests have a 15-second deadline; failures open manual entry in the app.
+After OCR the user must explicitly tap a category before confirming the item.
+`OCR_ENGINE=tesseract` remains an explicit legacy single-photo mode for development
+and deterministic OCR tests; it requires the **Tesseract executable** on PATH.
 
 ### Model server (assistant and scanning)
 
@@ -132,11 +199,14 @@ npx expo prebuild --platform ios   # only after app.json or native-dependency ch
 
 ## Demo and replay
 
-Demo control is API-only:
+The isolated demo service starts with sample inventory. Demo control is API-only:
 
 ```sh
 curl -X POST http://127.0.0.1:8010/api/demo/scenarios/hot_car/start
-curl http://127.0.0.1:8010/api/state
+curl http://127.0.0.1:8010/api/demo/state
+```
+
+```sh
 curl -X POST http://127.0.0.1:8010/api/demo/stop
 curl -X POST http://127.0.0.1:8010/api/demo/reset
 ```

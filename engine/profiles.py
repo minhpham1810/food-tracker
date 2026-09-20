@@ -9,6 +9,7 @@ _REQUIRED_FIELDS = {
     "opened_d0_days",
     "q10",
     "placeholder",
+    "source",
     "advice",
 }
 
@@ -23,6 +24,8 @@ def load_profiles() -> dict[str, FoodProfile]:
             raise ValueError(f"Profile {profile_id!r} missing fields: {sorted(missing)}")
         keywords = tuple(word.lower() for word in values.pop("keywords", ()))
         profile = FoodProfile(id=profile_id, keywords=keywords, **values)
+        if profile.source not in {"placeholder", "foodkeeper", "combase", "usda-fsis"}:
+            raise ValueError(f"Profile {profile_id!r} has invalid source")
         if profile.d0_days <= 0 or profile.opened_d0_days <= 0 or profile.q10 <= 0:
             raise ValueError(f"Profile {profile_id!r} has invalid numeric values")
         profiles[profile_id] = profile

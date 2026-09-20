@@ -85,6 +85,7 @@ def test_ocr_confirm_creates_item_with_scanned_metadata():
         "/api/ocr/confirm",
         json={
             "profile_id": scanned["suggested_profile_id"],
+            "category_confirmed": True,
             "name": scanned["product_name"],
             "brand": scanned["brand"],
             "printed_date": scanned["printed_date"],
@@ -100,7 +101,7 @@ def test_ocr_confirm_creates_item_with_scanned_metadata():
 
 
 def test_ocr_confirm_rejects_unknown_profile():
-    response = client.post("/api/ocr/confirm", json={"profile_id": "made-up"})
+    response = client.post("/api/ocr/confirm", json={"profile_id": "made-up", "category_confirmed": True})
     assert response.status_code == 400
 
 

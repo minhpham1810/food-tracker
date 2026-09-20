@@ -17,3 +17,14 @@ def test_negative_log_resistance_residual_increases_anomaly():
 def test_non_positive_resistance_is_rejected():
     with pytest.raises(ValueError):
         fit_gas_baseline(np.array([4.]), np.array([60.]), np.array([0.]))
+
+
+def test_near_constant_predictors_select_reduced_model():
+    T = np.full(600, 4.0) + np.linspace(-0.05, 0.05, 600)
+    RH = np.full(600, 60.0) + np.linspace(-0.2, 0.2, 600)
+    R = np.full(600, 200000.0) * np.exp(np.linspace(-0.01, 0.01, 600))
+    baseline = fit_gas_baseline(T, RH, R)
+    assert baseline.interaction is False
+    assert len(baseline.beta) == 3
+    assert baseline.r2 >= 0.0
+    assert baseline.baseline_residual_sigma > 0

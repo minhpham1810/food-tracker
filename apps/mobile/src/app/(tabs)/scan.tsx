@@ -40,6 +40,7 @@ export default function ScanScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   // Deliberately starts null: an unrecognised label must NOT silently become dairy.
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [categoryConfirmed, setCategoryConfirmed] = useState(false);
   const [profiles, setProfiles] = useState<FoodProfile[]>([]);
   const [showRawText, setShowRawText] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export default function ScanScreen() {
 
   const reset = () => {
     setPhotoUris([]);
+    setCategoryConfirmed(false);
     setResult(null);
     setDraft(null);
     setProfileId(null);
@@ -63,6 +65,7 @@ export default function ScanScreen() {
   };
 
   const clearScanResult = () => {
+    setCategoryConfirmed(false);
     setResult(null);
     setDraft(null);
     setProfileId(null);
@@ -122,17 +125,19 @@ export default function ScanScreen() {
       setProfileId(scanned.suggested_profile_id);
     } catch (err) {
       setError(`OCR scan failed: ${err instanceof Error ? err.message : String(err)}`);
+      router.push('/add-item');
     } finally {
       setScanning(false);
     }
   };
 
   const confirm = async () => {
-    if (!draft || profileId === null) return;
+    if (!draft || profileId === null || !categoryConfirmed) return;
     setConfirming(true);
     setError(null);
     try {
       await ocrConfirm({
+        category_confirmed: categoryConfirmed,
         profile_id: profileId,
         // Adopts the photo this scan already uploaded as the item's thumbnail.
         scan_id: result?.scan_id ?? null,
@@ -169,7 +174,7 @@ export default function ScanScreen() {
       : undefined;
   const unreadable = result !== null && result.raw_text.trim().length === 0;
   const nameIsEmpty = draft !== null && draft.name.trim().length === 0;
-  const canConfirm = draft !== null && profileId !== null && !nameIsEmpty && !confirming;
+  const canConfirm = draft !== null && profileId !== null && categoryConfirmed && !nameIsEmpty && !confirming;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -196,7 +201,7 @@ export default function ScanScreen() {
         />
       </View>
 
-      {photoUris.length === 0 && (
+      {(
         <Link href="/add-item" asChild>
           <Pressable accessibilityRole="button" style={styles.disclosure}>
             <Text style={styles.manualLink}>No label? Add it manually</Text>
@@ -305,6 +310,7 @@ export default function ScanScreen() {
           />
 
           <Text style={styles.fieldLabel}>Food category</Text>
+          <Text style={styles.warnText}>Tap the correct category to confirm it, even if OCR suggested one.</Text>
           {profileId === null && (
             <Text style={styles.warnText}>
               OCR didn&apos;t recognise this food — pick a category so the freshness budget is right.
@@ -316,7 +322,7 @@ export default function ScanScreen() {
                 key={profile.id}
                 label={profile.name}
                 selected={profile.id === profileId}
-                onPress={() => setProfileId(profile.id)}
+                onPress={() => { setProfileId(profile.id); setCategoryConfirmed(true); }}
               />
             ))}
           </View>

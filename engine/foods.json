@@ -3,8 +3,10 @@
     "name": "Poultry",
     "d0_days": 2.0,
     "opened_d0_days": 1.0,
-    "q10": 2.8,
+    "q10": 2.7,
+    "q10_source": "fitted-published-multitemp",
     "placeholder": true,
+    "source": "usda-fsis",
     "advice": "Keep refrigerated on the bottom shelf to reduce cross-contamination risk.",
     "keywords": ["chicken", "turkey", "duck", "poultry", "drumstick", "thigh", "wing"]
   },
@@ -12,8 +14,10 @@
     "name": "Fish & seafood",
     "d0_days": 2.0,
     "opened_d0_days": 1.0,
-    "q10": 3.0,
+    "q10": 2.7,
+    "q10_source": "fitted-published-multitemp",
     "placeholder": true,
+    "source": "usda-fsis",
     "advice": "Keep in the coldest part of the fridge, ideally on ice, and use quickly.",
     "keywords": ["fish", "salmon", "tuna", "cod", "tilapia", "trout", "shrimp", "prawn", "crab", "lobster", "scallop", "mussel", "oyster", "seafood"]
   },
@@ -21,17 +25,21 @@
     "name": "Red meat",
     "d0_days": 4.0,
     "opened_d0_days": 2.0,
-    "q10": 2.8,
+    "q10": 2.7,
+    "q10_source": "fitted-published-multitemp",
     "placeholder": true,
+    "source": "usda-fsis",
     "advice": "Keep sealed on the bottom shelf; ground meat spoils faster than whole cuts.",
     "keywords": ["beef", "steak", "pork", "lamb", "veal", "venison", "bacon", "sausage", "brisket", "rib", "mince", "ground meat", "chop"]
   },
   "dairy": {
     "name": "Dairy",
-    "d0_days": 10.0,
-    "opened_d0_days": 5.0,
-    "q10": 2.5,
+    "d0_days": 6.0,
+    "opened_d0_days": 4.0,
+    "q10": 2.7,
+    "q10_source": "fitted-published-multitemp",
     "placeholder": true,
+    "source": "usda-fsis",
     "advice": "Keep on a stable refrigerator shelf rather than the door.",
     "keywords": ["milk", "buttermilk", "cheese", "yogurt", "yoghurt", "butter", "cream", "kefir", "dairy"]
   },
@@ -41,6 +49,7 @@
     "opened_d0_days": 28.0,
     "q10": 2.0,
     "placeholder": true,
+    "source": "usda-fsis",
     "advice": "Keep in the original carton on a shelf, not in the door.",
     "keywords": ["egg"]
   },
@@ -50,6 +59,7 @@
     "opened_d0_days": 3.0,
     "q10": 2.2,
     "placeholder": true,
+    "source": "placeholder",
     "advice": "Store in the high-humidity crisper drawer.",
     "keywords": ["spinach", "lettuce", "kale", "arugula", "chard", "romaine", "greens", "spring mix", "salad"]
   },
@@ -59,6 +69,7 @@
     "opened_d0_days": 4.0,
     "q10": 2.2,
     "placeholder": true,
+    "source": "placeholder",
     "advice": "Store in the crisper drawer; keep cut vegetables in a sealed container.",
     "keywords": ["vegetable", "veggie", "carrot", "broccoli", "cauliflower", "pepper", "cucumber", "tomato", "zucchini", "celery", "mushroom", "asparagus", "green bean", "cabbage"]
   },
@@ -68,6 +79,7 @@
     "opened_d0_days": 3.0,
     "q10": 2.2,
     "placeholder": true,
+    "source": "placeholder",
     "advice": "Store in the low-humidity crisper drawer, away from vegetables.",
     "keywords": ["fruit", "apple", "berry", "berries", "strawberry", "strawberries", "blueberry", "blueberries", "raspberry", "raspberries", "grape", "orange", "lemon", "lime", "melon", "peach", "pear", "cherry", "cherries", "plum", "kiwi"]
   },
@@ -77,6 +89,7 @@
     "opened_d0_days": 3.0,
     "q10": 2.5,
     "placeholder": true,
+    "source": "placeholder",
     "advice": "Cool quickly and keep in a sealed container.",
     "keywords": ["leftover", "cooked", "soup", "stew", "casserole"]
   }

@@ -15,7 +15,7 @@ from PIL import Image
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_MODEL = "qwen3.5:9b"
-DEFAULT_TIMEOUT_SECONDS = 120.0
+DEFAULT_TIMEOUT_SECONDS = 15.0
 MAX_IMAGE_EDGE = 2048
 
 _NULLABLE_STRING = {"anyOf": [{"type": "string"}, {"type": "null"}]}
@@ -136,7 +136,7 @@ def _timeout_seconds() -> float:
         raise VisionOCRError("OCR_TIMEOUT_SECONDS must be numeric") from exc
     if timeout <= 0:
         raise VisionOCRError("OCR_TIMEOUT_SECONDS must be positive")
-    return timeout
+    return min(timeout, DEFAULT_TIMEOUT_SECONDS)
 
 
 def _encode_image(image: Image.Image) -> str:

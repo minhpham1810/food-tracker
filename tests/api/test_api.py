@@ -138,7 +138,7 @@ def test_scan_photo_becomes_the_item_thumbnail():
     scan_id = service.stash_scan_photo(thumbnail(source.getvalue()))
 
     created = client.post(
-        "/api/ocr/confirm", json={"profile_id": "dairy", "name": "Scanned milk", "scan_id": scan_id}
+        "/api/ocr/confirm", json={"profile_id": "dairy", "name": "Scanned milk", "scan_id": scan_id, "category_confirmed": True}
     )
     assert created.status_code == 201
     item_id = created.json()["id"]
@@ -151,7 +151,7 @@ def test_scan_photo_becomes_the_item_thumbnail():
     assert max(stored.size) == 512
 
     # A scan id is single-use, so a second confirm cannot adopt the same photo.
-    again = client.post("/api/ocr/confirm", json={"profile_id": "dairy", "scan_id": scan_id})
+    again = client.post("/api/ocr/confirm", json={"profile_id": "dairy", "scan_id": scan_id, "category_confirmed": True})
     assert again.json()["has_photo"] is False
 
     manual = client.post("/api/items", json={"profile_id": "dairy", "name": "Typed in"})

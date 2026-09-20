@@ -1,4 +1,17 @@
+import math
+
+MODEL_MIN_C = -1.0
+MODEL_MAX_C = 25.0
+PROJECTION_TEMPERATURE_C = 4.0
+
+
+def in_model_range(temperature: float) -> bool:
+    return math.isfinite(temperature) and MODEL_MIN_C <= temperature <= MODEL_MAX_C
+
+
 def rate_multiplier(T: float, Q10: float, T_ref: float = 4.0) -> float:
+    if not in_model_range(T):
+        raise ValueError("outside modelled range")
     if Q10 <= 0:
         raise ValueError("Q10 must be positive")
     return Q10 ** ((T - T_ref) / 10.0)

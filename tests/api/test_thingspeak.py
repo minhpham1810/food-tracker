@@ -1,5 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime
+
+import pytest
 
 import httpx
 
@@ -15,6 +18,7 @@ def _entry(entry_id, created_at, temp="22.2", rh="53.7", gas="219884.0"):
         "field2": rh,
         "field3": "10.040",
         "field7": gas,
+        "field8": "3",
     }
 
 
@@ -31,6 +35,7 @@ def test_parse_feed_maps_bme688_fields_and_orders_by_entry():
     assert sample.temperature == 22.172
     assert sample.humidity == 53.7
     assert sample.gas_resistance == 219884.0
+    assert sample.iaq_accuracy == 3
     assert sample.door_open is False
     assert sample.timestamp - parsed[0][1].timestamp == 23
 
@@ -79,7 +84,8 @@ def _poller(feeds_by_call, service, gas_field="field7"):
     config = ThingSpeakConfig(
         channel_id="3499736", read_api_key="KEY", poll_seconds=15, gas_field=gas_field
     )
-    return ThingSpeakPoller(config, service.ingest, service.store, client=client), calls
+    return ThingSpeakPoller(config, service.ingest, service.store, client=client,
+                           history_callback=service.restore_complete_history), calls
 
 
 def test_first_poll_takes_only_latest_then_only_new_entries():
@@ -142,3 +148,87 @@ def test_config_is_off_without_a_channel(monkeypatch):
     assert config.gas_field is None
     monkeypatch.setenv("THINGSPEAK_GAS_FIELD", "field7")
     assert ThingSpeakConfig.from_env().gas_field == "field7"
+
+
+def test_truncated_five_day_history_is_flagged_and_survives_restart(tmp_path):
+    from dataclasses import asdict
+    from apps.api.schemas import ItemOut
+
+    database = str(tmp_path / "history.sqlite3")
+    service = FreshnessService(seed_hero_items=False, storage_path=database)
+    item = service.add_item("eggs")
+    first_timestamp = datetime.fromisoformat("2026-09-19T06:00:00+00:00").timestamp()
+    service.store.items[item.id].created_at = first_timestamp - 5 * 86400
+    poller, _ = _poller([[
+        _entry(100, "2026-09-19T06:00:00Z"),
+        _entry(101, "2026-09-19T06:00:20Z"),
+    ]], service)
+    asyncio.run(poller.poll_once())
+    state = ItemOut(**asdict(service.get_item(item.id)))
+    assert state.t_eff_incomplete is True
+    assert state.confidence == "low"
+    assert state.history_message == "partial history — estimate may be optimistic"
+
+    restarted = FreshnessService(seed_hero_items=False, storage_path=database)
+    assert restarted.get_item(item.id).t_eff == state.t_eff
+    assert restarted.get_item(item.id).t_eff_incomplete is True
+    # A normal catch-up, even with an overlapping entry, cannot clear the warning.
+    catchup, _ = _poller([[
+        _entry(101, "2026-09-19T06:00:20Z"),
+        _entry(102, "2026-09-19T06:00:40Z"),
+    ]], restarted)
+    asyncio.run(catchup.poll_once())
+    assert restarted.get_item(item.id).t_eff_incomplete is True
+    assert restarted.get_item(item.id).confidence == "low"
+
+
+def test_full_later_replay_repairs_budget_before_clearing_warning(tmp_path):
+    from engine.burn import update_budget
+
+    database = str(tmp_path / "repair.sqlite3")
+    service = FreshnessService(seed_hero_items=False, storage_path=database)
+    item = service.add_item("dairy")
+    service.store.items[item.id].created_at = datetime.fromisoformat("2026-09-19T06:00:00+00:00").timestamp()
+    entries = [_entry(i + 1, stamp, temp="4") for i, stamp in enumerate([
+        "2026-09-19T06:00:00Z", "2026-09-19T06:00:20Z", "2026-09-19T06:00:40Z"])]
+    poller, _ = _poller([entries[1:], entries, entries], service)
+    asyncio.run(poller.poll_once())
+    before = service.get_item(item.id)
+    assert before.t_eff_incomplete is True
+    asyncio.run(poller.poll_once())
+    recovered = service.get_item(item.id)
+    assert recovered.t_eff == pytest.approx(update_budget(0, 4, 40 / 3600, 2.5))
+    assert recovered.t_eff > before.t_eff
+    assert recovered.t_eff_incomplete is False
+    assert recovered.history_message is None
+    asyncio.run(poller.poll_once())
+    assert service.get_item(item.id).t_eff == recovered.t_eff
+    restarted = FreshnessService(seed_hero_items=False, storage_path=database)
+    assert restarted.get_item(item.id).t_eff_incomplete is False
+
+
+def test_normal_restart_preserves_complete_budget_without_old_history(tmp_path):
+    database = str(tmp_path / "complete.sqlite3")
+    service = FreshnessService(seed_hero_items=False, storage_path=database)
+    item = service.add_item("eggs")
+    record = service.store.items[item.id]
+    record.created_at = datetime.fromisoformat("2026-09-14T06:00:00+00:00").timestamp()
+    record.t_eff = 5.0
+    entry = _entry(100, "2026-09-19T06:00:00Z")
+    service.ingest(parse_feed([entry])[0][1])
+    service.store.mark_processed_entry(100)
+    restarted = FreshnessService(seed_hero_items=False, storage_path=database)
+    poller, _ = _poller([[entry]], restarted)
+    asyncio.run(poller.poll_once())
+    state = restarted.get_item(item.id)
+    assert state.t_eff == 5.0
+    assert state.t_eff_incomplete is False
+
+
+def test_empty_initial_history_flags_item():
+    service = FreshnessService(seed_hero_items=False)
+    item = service.add_item("eggs")
+    poller, _ = _poller([[]], service)
+    asyncio.run(poller.poll_once())
+    assert service.get_item(item.id).t_eff_incomplete is True
+    assert service.get_item(item.id).confidence == "low"
