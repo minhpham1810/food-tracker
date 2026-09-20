@@ -6,7 +6,7 @@ from apps.api.service import FreshnessService
 
 
 def make_dispatcher():
-    service = FreshnessService(seed_hero_items=False)
+    service = FreshnessService()
     item = service.add_item("dairy")
     return ToolDispatcher(service), item.id
 

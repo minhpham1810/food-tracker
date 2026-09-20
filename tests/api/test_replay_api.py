@@ -9,6 +9,9 @@ from simulator.sensor_sim import SensorSimulator
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     service = FreshnessService()
+    # Replay only shows up in the state through the items it ages, so the
+    # isolated service needs an inventory of its own.
+    service.add_item("dairy", "Milk")
     monkeypatch.setattr(main, "service", service)
     monkeypatch.setattr(
         main, "simulator",

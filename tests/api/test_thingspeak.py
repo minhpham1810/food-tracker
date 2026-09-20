@@ -83,7 +83,7 @@ def _poller(feeds_by_call, service, gas_field="field7"):
 
 
 def test_first_poll_takes_only_latest_then_only_new_entries():
-    service = FreshnessService(seed_hero_items=False)
+    service = FreshnessService()
     poller, calls = _poller(
         [
             [_entry(10, "2026-09-19T06:00:00Z")],
@@ -106,7 +106,7 @@ def test_first_poll_takes_only_latest_then_only_new_entries():
 
 
 def test_poll_advances_past_invalid_entries_and_warns_once(caplog):
-    service = FreshnessService(seed_hero_items=False)
+    service = FreshnessService()
     bad = _entry(20, "2026-09-19T06:00:00Z", temp=None)
     poller, _ = _poller(
         [[bad], [bad, _entry(21, "2026-09-19T06:00:20Z", gas="-1.0")]], service
@@ -125,7 +125,7 @@ def test_poll_advances_past_invalid_entries_and_warns_once(caplog):
 
 
 def test_poll_is_skipped_while_a_demo_scenario_runs():
-    service = FreshnessService(seed_hero_items=False)
+    service = FreshnessService()
     service.store.active_scenario = "hot_car"
     poller, calls = _poller([[_entry(1, "2026-09-19T06:00:00Z")]], service)
     assert asyncio.run(poller.poll_once()) == 0

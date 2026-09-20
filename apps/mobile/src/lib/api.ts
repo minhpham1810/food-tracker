@@ -13,10 +13,17 @@ const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8010/
  */
 const REQUEST_TIMEOUT_MS = 12000;
 const OCR_REQUEST_TIMEOUT_MS = 130000;
+// The assistant runs a tool-calling loop of up to 4 rounds against a local model,
+// so a question that touches tools takes far longer than a plain CRUD call.
+const ASSISTANT_TIMEOUT_MS = 120000;
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${API_BASE}${path}`, { ...init, signal: controller.signal });
     if (!response.ok) {
@@ -25,9 +32,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     return (await response.json()) as T;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    // expo/fetch reports an abort as FetchRequestCanceledException, not an
+    // Error named 'AbortError', so ask the signal rather than the error.
+    if (controller.signal.aborted) {
       throw new Error(
-        `No response from ${API_BASE} after ${REQUEST_TIMEOUT_MS / 1000}s. ` +
+        `No response from ${API_BASE} after ${timeoutMs / 1000}s. ` +
           'Check the API is running and that the phone is on the same Wi-Fi.',
       );
     }
@@ -37,12 +46,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-function requestJson<T>(path: string, body: unknown, method = 'POST'): Promise<T> {
-  return request<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+function requestJson<T>(
+  path: string,
+  body: unknown,
+  method = 'POST',
+  timeoutMs?: number,
+): Promise<T> {
+  return request<T>(
+    path,
+    {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  );
 }
 
 export function getItems(): Promise<ItemState[]> {
@@ -136,7 +154,7 @@ export async function ocrScan(photoUris: string[]): Promise<OCRResult> {
     }
     return (await response.json()) as OCRResult;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (controller.signal.aborted) {
       throw new Error('Qwen did not finish the scan within 130 seconds.');
     }
     throw error;
@@ -166,5 +184,5 @@ export function ocrConfirm(payload: OCRConfirmPayload): Promise<ItemState> {
 }
 
 export function sendAssistantMessage(message: string): Promise<AssistantReply> {
-  return requestJson('/assistant/message', { message });
+  return requestJson('/assistant/message', { message }, 'POST', ASSISTANT_TIMEOUT_MS);
 }

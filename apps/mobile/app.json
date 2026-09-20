@@ -8,6 +8,8 @@
     "scheme": "freshnesstracker",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.minhpham.freshnesstracker",
+      "appleTeamId": "9N3XWMXTQJ",
       "infoPlist": {
         "NSCameraUsageDescription": "Freshness Tracker uses the camera to scan food labels.",
         "NSPhotoLibraryUsageDescription": "Freshness Tracker reads photos so you can scan a food label from your library.",
@@ -15,8 +17,7 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
-      },
-      "bundleIdentifier": "com.minhpham.freshnesstracker"
+      }
     },
     "android": {
       "adaptiveIcon": {
