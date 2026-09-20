@@ -232,3 +232,35 @@ def test_aging_rate_is_withheld_when_the_reading_is_stale(monkeypatch):
     assert state.telemetry.connected is False
     assert state.items[0].aging_rate is None
     assert state.telemetry.aging_rate is None
+
+
+def test_storage_optimization_quantifies_warm_temperature_benefit():
+    service = FreshnessService(seed_hero_items=False)
+    service.add_item("dairy")
+    now = time.time()
+    service.ingest(TelemetrySample(now, 12.0, 75.0, None, False))
+
+    optimization = service.snapshot().items[0].storage_optimization
+    assert optimization.temperature_action == "cool_to_target"
+    assert optimization.current_temperature_c == 12.0
+    assert optimization.target_temperature_c == 4.0
+    assert optimization.projected_days_at_current_temperature < optimization.projected_days_at_target_temperature
+    assert optimization.potential_days_preserved == pytest.approx(
+        optimization.projected_days_at_target_temperature
+        - optimization.projected_days_at_current_temperature
+    )
+    assert optimization.humidity_affects_days_left is False
+
+
+def test_storage_optimization_does_not_invent_advice_from_stale_reading(monkeypatch):
+    service = FreshnessService(seed_hero_items=False)
+    service.add_item("dairy")
+    now = time.time()
+    service.ingest(TelemetrySample(now, 12.0, 75.0, None, False))
+    monkeypatch.setattr("apps.api.service.time.time", lambda: now + 10_000)
+
+    optimization = service.snapshot().items[0].storage_optimization
+    assert optimization.temperature_action == "unavailable"
+    assert optimization.current_temperature_c is None
+    assert optimization.projected_days_at_current_temperature is None
+    assert optimization.potential_days_preserved is None

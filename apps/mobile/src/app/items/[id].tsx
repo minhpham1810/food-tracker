@@ -61,6 +61,27 @@ function percent(value: number | null, fallback: string): string {
   return value == null ? fallback : `${Math.round(value * 100)}%`;
 }
 
+function temperatureRecommendation(
+  optimization: ItemState['storage_optimization'],
+  temperatureUnit: Parameters<typeof formatTemperature>[1],
+): string {
+  const target = formatTemperature(optimization.target_temperature_c, temperatureUnit);
+  const current = optimization.current_temperature_c == null
+    ? null
+    : formatTemperature(optimization.current_temperature_c, temperatureUnit);
+
+  switch (optimization.temperature_action) {
+    case 'cool_to_target':
+      return `Lower the refrigerator to ${target} or below. The current ${current} reading is consuming this item's temperature budget faster.`;
+    case 'maintain':
+      return `Keep the temperature stable. The current ${current} reading is already at or below the ${target} reference.`;
+    case 'check_freezing':
+      return `Check this item's placement: ${current} is below freezing. Colder slows the model, but accidental freezing can damage food quality.`;
+    default:
+      return `Restore a live, usable temperature reading, then keep the refrigerator at ${target} or below.`;
+  }
+}
+
 export default function ItemDetailScreen() {
   const styles = useStyles(makeStyles);
   const { colors, statusColors, confidenceColors } = useTheme();
@@ -220,6 +241,43 @@ export default function ItemDetailScreen() {
             Printed date: {printedDays.toFixed(0)} days · Our estimate: {estimateLine}
           </Text>
         )}
+      </Card>
+
+      <Card>
+        <Text style={styles.eyebrow}>MAXIMIZE REMAINING TIME</Text>
+        <Text style={styles.recommendationTitle}>
+          {temperatureRecommendation(item.storage_optimization, temperatureUnit)}
+        </Text>
+        {item.storage_optimization.temperature_action === 'cool_to_target'
+          && item.storage_optimization.projected_days_at_current_temperature !== null
+          && item.storage_optimization.projected_days_at_target_temperature !== null && (
+          <View style={styles.projectionBox}>
+            <View style={styles.trackRow}>
+              <Text style={styles.trackLabel}>If current temperature continues</Text>
+              <Text style={styles.trackValue}>
+                {dayBudgetText(item.storage_optimization.projected_days_at_current_temperature)}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.trackRow}>
+              <Text style={styles.trackLabel}>
+                At {formatTemperature(item.storage_optimization.target_temperature_c, temperatureUnit)}
+              </Text>
+              <Text style={styles.trackValue}>
+                {dayBudgetText(item.storage_optimization.projected_days_at_target_temperature)}
+              </Text>
+            </View>
+          </View>
+        )}
+        <Text style={styles.recommendationBullet}>• {item.advice}</Text>
+        <Text style={styles.recommendationBullet}>
+          • Humidity does not directly change the days-left calculation. Use the storage advice
+          above for the right drawer or container instead of chasing a sensor number.
+        </Text>
+        <Text style={styles.footnote}>
+          This is a future Track A scenario, not recovered time or a safety guarantee. Gas and
+          color signals can shorten the estimate, but changing them cannot extend it.
+        </Text>
       </Card>
 
       <Card>
@@ -409,6 +467,22 @@ const makeStyles = (colors: ThemeColors) =>
   statusCopy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   comparison: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   badgeRow: { flexDirection: 'row' },
+  recommendationTitle: {
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginTop: spacing.xs,
+  },
+  projectionBox: {
+    backgroundColor: colors.inputBg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+  },
+  recommendationBullet: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
 
   eyebrow: { ...eyebrow, color: colors.textDim },
   trackRow: {

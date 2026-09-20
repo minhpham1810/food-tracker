@@ -110,6 +110,16 @@ class FusionUncertaintyOut(BaseModel):
     sigma_b_reason: str
 
 
+class StorageOptimizationOut(BaseModel):
+    target_temperature_c: float
+    current_temperature_c: float | None
+    projected_days_at_current_temperature: float | None
+    projected_days_at_target_temperature: float | None
+    potential_days_preserved: float | None
+    temperature_action: str
+    humidity_affects_days_left: bool
+
+
 class ItemOut(BaseModel):
     id: str
     name: str
@@ -143,6 +153,7 @@ class ItemOut(BaseModel):
     aging_rate: float | None = None
     projection_temperature_c: float
     estimate_message: str | None
+    storage_optimization: StorageOptimizationOut
 
 
 class AppStateOut(BaseModel):

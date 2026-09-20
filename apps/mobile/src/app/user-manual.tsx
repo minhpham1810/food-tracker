@@ -14,7 +14,7 @@ const sections = [
   },
   {
     title: '3 · Update an item',
-    body: 'Tap an item to rename it, correct its food category, mark it opened, score a supported colorimetric label, or remove it. Marking an item opened changes the applicable shelf-life budget when the food profile supports one.',
+    body: 'Tap an item to see Maximize remaining time, rename it, correct its food category, mark it opened, score a supported colorimetric label, or remove it. The recommendation compares the current temperature with a 4°C reference and includes category-specific storage advice. Humidity does not directly change calculated days.',
   },
   {
     title: '4 · Use the assistant',

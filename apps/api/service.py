@@ -23,6 +23,23 @@ STALE_AFTER_SECONDS = 180
 
 
 @dataclass(frozen=True)
+class StorageOptimization:
+    """A transparent what-if projection based only on Track A.
+
+    Humidity and experimental gas/color signals are deliberately excluded:
+    they do not extend the temperature budget in the current model.
+    """
+
+    target_temperature_c: float
+    current_temperature_c: float | None
+    projected_days_at_current_temperature: float | None
+    projected_days_at_target_temperature: float | None
+    potential_days_preserved: float | None
+    temperature_action: str
+    humidity_affects_days_left: bool = False
+
+
+@dataclass(frozen=True)
 class ItemState:
     id: str
     name: str
@@ -58,6 +75,7 @@ class ItemState:
     # Current conditions, not a prediction: how fast this item is aging right
     # now versus 4C. None when the reading is missing, stale or out of range.
     aging_rate: float | None
+    storage_optimization: StorageOptimization
 
 
 @dataclass(frozen=True)
@@ -424,6 +442,49 @@ class FreshnessService:
         days_a = days_left(item.t_eff, item.active_d0_days, PROJECTION_TEMPERATURE_C, profile.q10)
         return f_a, days_a
 
+    def _storage_optimization(
+        self,
+        item: ItemRecord,
+        current_temperature: float | None,
+        reading_available: bool,
+    ) -> StorageOptimization:
+        """Compare continued storage now with the model's 4C reference.
+
+        This is a prospective scenario, not a promise and not a way to undo
+        temperature exposure that has already accrued.
+        """
+        profile = self.profiles[item.profile_id]
+        target_days = days_left(
+            item.t_eff, item.active_d0_days, PROJECTION_TEMPERATURE_C, profile.q10)
+
+        if item.outside_model_range or not reading_available or current_temperature is None:
+            return StorageOptimization(
+                target_temperature_c=PROJECTION_TEMPERATURE_C,
+                current_temperature_c=None,
+                projected_days_at_current_temperature=None,
+                projected_days_at_target_temperature=None if item.outside_model_range else target_days,
+                potential_days_preserved=None,
+                temperature_action="unavailable",
+            )
+
+        current_days = days_left(
+            item.t_eff, item.active_d0_days, current_temperature, profile.q10)
+        if current_temperature > PROJECTION_TEMPERATURE_C:
+            action = "cool_to_target"
+        elif current_temperature < 0.0:
+            action = "check_freezing"
+        else:
+            action = "maintain"
+
+        return StorageOptimization(
+            target_temperature_c=PROJECTION_TEMPERATURE_C,
+            current_temperature_c=current_temperature,
+            projected_days_at_current_temperature=current_days,
+            projected_days_at_target_temperature=target_days,
+            potential_days_preserved=max(0.0, target_days - current_days),
+            temperature_action=action,
+        )
+
     def _item_state(self, item: ItemRecord, gas_score: float | None = None) -> ItemState:
         profile = self.profiles[item.profile_id]
         f_a, days_a = self._track_a(item)
@@ -475,6 +536,11 @@ class FreshnessService:
             # A stale reading must not be presented as the current rate.
             aging_rate=current_aging_rate(
                 latest.temperature if latest is not None and not stale else None, profile.q10),
+            storage_optimization=self._storage_optimization(
+                item,
+                latest.temperature if latest is not None else None,
+                latest is not None and not stale and in_model_range(latest.temperature),
+            ),
             estimate_message=("Readings missing or stale — estimate may be optimistic" if stale
                 else f"data gap: {self.store.data_gap_hours:.0f}h — estimate may be optimistic"
                 if self.store.data_gap_hours > 0 else None),

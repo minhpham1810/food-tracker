@@ -32,6 +32,16 @@ export interface ItemState {
   estimate_message: string | null;
   /** Current aging speed vs 4C. null = no usable reading; never render as 1.0x. */
   aging_rate: number | null;
+  /** Prospective Track A scenario; it never restores already-consumed freshness. */
+  storage_optimization: {
+    target_temperature_c: number;
+    current_temperature_c: number | null;
+    projected_days_at_current_temperature: number | null;
+    projected_days_at_target_temperature: number | null;
+    potential_days_preserved: number | null;
+    temperature_action: 'cool_to_target' | 'maintain' | 'check_freezing' | 'unavailable';
+    humidity_affects_days_left: boolean;
+  };
   fusion_uncertainty: {
     used_for_estimate: boolean;
     sigma_a: number;

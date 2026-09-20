@@ -157,4 +157,17 @@ def _item_summary(item: ItemState) -> dict:
         "status": item.status,
         "confidence": item.confidence,
         "advice": item.advice,
+        "storage_optimization": {
+            "target_temperature_c": item.storage_optimization.target_temperature_c,
+            "current_temperature_c": item.storage_optimization.current_temperature_c,
+            "projected_days_at_current_temperature": (
+                item.storage_optimization.projected_days_at_current_temperature
+            ),
+            "projected_days_at_target_temperature": (
+                item.storage_optimization.projected_days_at_target_temperature
+            ),
+            "potential_days_preserved": item.storage_optimization.potential_days_preserved,
+            "temperature_action": item.storage_optimization.temperature_action,
+            "humidity_affects_days_left": item.storage_optimization.humidity_affects_days_left,
+        },
     }
