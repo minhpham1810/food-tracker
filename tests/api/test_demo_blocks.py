@@ -71,7 +71,7 @@ def test_gas_is_fridge_level_only_and_calibration_is_unused(monkeypatch):
 
 
 def test_projection_uses_4c_while_past_exposure_uses_recorded_temperature():
-    from engine.burn import update_budget
+    from engine.burn import rate_multiplier, update_budget
     service = FreshnessService(seed_hero_items=False)
     item = service.add_item('dairy')
     service.ingest(sample(0, 4))
@@ -86,7 +86,7 @@ def test_projection_uses_4c_while_past_exposure_uses_recorded_temperature():
 
 
 def test_category_change_replays_with_new_q10_and_clips_tracking_start(monkeypatch):
-    from engine.burn import update_budget
+    from engine.burn import rate_multiplier, update_budget
     monkeypatch.setattr('apps.api.service.time.time', lambda: 0)
     service = FreshnessService(seed_hero_items=False)
     item = service.add_item('dairy')
@@ -94,7 +94,7 @@ def test_category_change_replays_with_new_q10_and_clips_tracking_start(monkeypat
     service.ingest(sample(120, 22))
     corrected = service.set_category(item.id, 'poultry')
     assert corrected.t_eff == pytest.approx(update_budget(0, 22, 120 / 3600, 2.7))
-    assert corrected.days_left == pytest.approx(2 - corrected.t_eff)
+    assert corrected.days_left == pytest.approx((2 - corrected.t_eff) / rate_multiplier(22, 2.7))
 
 
 def test_category_change_refuses_missing_history_without_changing_item(monkeypatch):

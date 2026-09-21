@@ -267,7 +267,7 @@ def test_storage_optimization_does_not_invent_advice_from_stale_reading(monkeypa
 
 
 def test_current_conditions_projection_matches_budget_over_aging_rate():
-    """The correction line's number must stay consistent with the headline."""
+    """The headline is the live-temperature projection, so the two must match."""
     service = FreshnessService()
     item = service.add_item("dairy")
     now = time.time()
@@ -277,9 +277,9 @@ def test_current_conditions_projection_matches_budget_over_aging_rate():
     state = service.snapshot().items[0]
     assert state.aging_rate == pytest.approx(2.7 ** 0.7)
     assert state.storage_optimization.projected_days_at_current_temperature == pytest.approx(
-        state.days_left / state.aging_rate)
-    # Warmer than 4C means the headline is the optimistic figure.
-    assert state.storage_optimization.projected_days_at_current_temperature < state.days_left
+        state.days_left)
+    # The 4C figure is now the alternative, and it is longer.
+    assert state.storage_optimization.projected_days_at_target_temperature > state.days_left
 
 
 def test_current_conditions_projection_is_withheld_when_reading_is_stale(monkeypatch):

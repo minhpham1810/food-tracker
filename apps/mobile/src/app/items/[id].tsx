@@ -43,8 +43,6 @@ import type { FoodProfile, ItemState } from '@/lib/types';
 import {
   estimate,
   dayBudgetText,
-  currentConditionsText,
-  AGING_RATE_CORRECTION,
   statusLabel,
 } from '@/lib/estimate';
 import { formatTemperature, useSettings } from '@/lib/settings';
@@ -228,20 +226,6 @@ export default function ItemDetailScreen() {
             </View>
             {!item.outside_model_range && (
               <FreshnessBar daysLeft={item.days_left} status={item.status} />
-            )}
-            {/* The headline assumes 4C. When the fridge is warmer that assumption is
-                optimistic, so the correction sits directly beneath the number it
-                corrects. Hidden without a usable reading -- never guessed at. */}
-            {item.aging_rate != null
-              && item.aging_rate > AGING_RATE_CORRECTION
-              && optimization.current_temperature_c !== null
-              && optimization.projected_days_at_current_temperature !== null && (
-              <Text style={styles.correction}>
-                {currentConditionsText(
-                  optimization.projected_days_at_current_temperature,
-                  formatTemperature(optimization.current_temperature_c, temperatureUnit),
-                )}
-              </Text>
             )}
             <Text style={styles.copy}>{statusCopy[item.status]}</Text>
             {caveat !== null && <Text style={styles.caveat}>{caveat}</Text>}
@@ -437,7 +421,6 @@ const makeStyles = (colors: ThemeColors) =>
   // that size is tuned for one or two digits.
   numberFallback: { fontSize: fontSize.xl, fontWeight: '600', letterSpacing: -0.5 },
   // A warning, not a competing headline: well below the number it corrects.
-  correction: { color: colors.warning, fontSize: fontSize.md, fontWeight: '600', lineHeight: 20 },
   copy: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   caveat: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 16 },
 

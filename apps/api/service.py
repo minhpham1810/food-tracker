@@ -434,12 +434,12 @@ class FreshnessService:
             )[0]
         )
 
-    def _track_a(self, item: ItemRecord) -> tuple[float, float]:
+    def _track_a(self, item: ItemRecord, temperature_c: float = PROJECTION_TEMPERATURE_C) -> tuple[float, float]:
         profile = self.profiles[item.profile_id]
         if item.active_d0_days <= 0:
             return 0.0, 0.0
         f_a = freshness_fraction(item.t_eff, item.active_d0_days)
-        days_a = days_left(item.t_eff, item.active_d0_days, PROJECTION_TEMPERATURE_C, profile.q10)
+        days_a = days_left(item.t_eff, item.active_d0_days, temperature_c, profile.q10)
         return f_a, days_a
 
     def _storage_optimization(
@@ -487,7 +487,11 @@ class FreshnessService:
 
     def _item_state(self, item: ItemRecord, gas_score: float | None = None) -> ItemState:
         profile = self.profiles[item.profile_id]
-        f_a, days_a = self._track_a(item)
+        latest = self.store.latest_telemetry
+        stale = latest is None or time.time() - latest.timestamp > STALE_AFTER_SECONDS
+        # Primary days-left projects at the live temperature; 4C only as a fallback.
+        live = latest is not None and not stale and in_model_range(latest.temperature)
+        f_a, days_a = self._track_a(item, latest.temperature if live else PROJECTION_TEMPERATURE_C)
         if gas_score is None:
             gas_score = self._latest_gas_anomaly()
         sigma_b = self.fusion_uncertainty.sigma_b
@@ -496,8 +500,6 @@ class FreshnessService:
         confidence = "med" if self.store.data_gap_hours > 0 and fused.confidence == "high" else fused.confidence
         if item.t_eff_incomplete:
             confidence = "low"
-        latest = self.store.latest_telemetry
-        stale = latest is None or time.time() - latest.timestamp > STALE_AFTER_SECONDS
         if stale or self.store.data_gap_hours > 0:
             confidence = "low"
         item.state = fused.status
