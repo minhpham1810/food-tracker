@@ -39,7 +39,9 @@ function RootStack() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.bg },
         }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Titled even though its header is hidden: iOS labels the back button
+            with the previous screen's title, which would otherwise be "(tabs)". */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
         <Stack.Screen name="items/[id]" options={{ title: 'Item detail' }} />
         <Stack.Screen name="add-item" options={{ title: 'Add manually' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
