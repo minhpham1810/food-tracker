@@ -1,7 +1,7 @@
 # Freshness Tracker
 
 A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
-telemetry simulator, an Expo mobile app, and a BME688 sensor sketch that uploads to
+telemetry simulator, an Expo mobile app, and a BME688 sennsor that uploads to
 ThingSpeak.
 
 This is an experimental waste-reduction prototype. Five profiles use USDA FSIS
@@ -15,6 +15,67 @@ Run only one API worker for one household. There is no account isolation or
 authentication. Do not deploy multiple processes against the same SQLite file:
 each process owns an in-memory snapshot that can overwrite another process.
 Keep the demo on a trusted local network. This limit is documented, not fixed.
+
+## Problem and solution (STAR)
+
+### Situation
+
+Households throw away food because they cannot tell when it is still good. The
+only signal they get is a printed date, and that date assumes the food has been
+kept cold the whole time. It does not know about the warm car ride home, a
+fridge door left open, or a fridge that runs warm. Spoilage speed is strongly
+temperature-dependent, so two identical packs with the same date can have very
+different real lives. People compensate by guessing: they either discard food
+that was fine (waste) or keep food too long (a safety risk).
+
+### Task
+
+Build a prototype that answers "how many days does this item have left?" from
+what actually happened to it, and does so honestly. The requirements were:
+
+- Estimate remaining freshness per item from **measured temperature exposure**,
+  not just the label date.
+- Use a cheap in-fridge gas sensor (BME688) and a label color score as extra
+  evidence, but never let them make food look **fresher** than the temperature
+  record supports.
+- Make entry low-effort (scan a label with the phone camera) and warn the user
+  before food is lost.
+- Never invent numbers. Every freshness figure must come from the engine, even
+  when a language-model assistant is talking to the user.
+- Stay clear about scope: this is a waste-reduction aid, **not a food-safety
+  device**.
+
+### Action
+
+| Piece | What was built |
+| --- | --- |
+| Freshness engine (`engine/`) | Pure functions. **Track A** integrates temperature into an effective-age budget with a Q10 rate multiplier relative to 4 C, so time spent warm burns more life. **Track B** fits a gas baseline on temperature and humidity and scores anomalies. **Track C** is a manual color-label score. `fusion.fuse` lets B and C only **shorten** Track A's days or veto to 0, and derives a confidence value and a status (`fresh`, `check_early`, `past_budget_quiet`, `discard_quality_signal`). |
+| Evidence-based profiles | `engine/foods.json` holds per-category `d0_days` from USDA FSIS cold-storage guidance for five categories, and a Q10 of 2.7 fitted (R^2 = 0.9997) to published chicken shelf-life at 0, 4, 10 and 15 C. See [Profile provenance](#profile-provenance). |
+| Hardware | A BME688 board (`hardware/sketch.cpp`) reads temperature, humidity and gas and uploads to ThingSpeak every 20 s. The API polls that channel. |
+| Backend (`apps/api/`) | FastAPI service that owns state. All telemetry sources (HTTP, ThingSpeak, simulator, CSV replay) go through one `service.ingest`, and alerts are recomputed from scratch on every change so they cannot drift. Optional SQLite persistence. |
+| Safe failure | Stale data (older than 3 minutes) shows as disconnected. Exposure outside -1 C to 25 C stops integration and withholds the estimate instead of guessing. Aging-rate and storage-temperature advice return "unavailable" rather than a fabricated 1.0x. |
+| Label scanning | Up to 5 photos go to a local Qwen vision model (Tesseract as a legacy option). The user reviews and edits every field and picks the category before the item is created. |
+| Assistant | A local tool-calling model that can act only through validated tools. It reads engine output and never produces freshness numbers itself. |
+| Mobile app (`apps/mobile/`) | Expo app with a fridge dashboard, item details, notifications, manual add, label scan, voice-capable assistant, Celsius/Fahrenheit and theme settings, and an in-app manual. |
+| Simulator and tests | Six scripted scenarios (`normal`, `hot_car`, `door_open`, `spoilage`, `contradiction`, `past_budget_quiet`) plus CSV replay let the whole pipeline run without a fridge. Pytest suites cover the engine, simulator and API. |
+
+### Result
+
+- A working end-to-end prototype: sensor to ThingSpeak to API to phone, with
+  per-item days left, a status, a confidence level and alerts.
+- The core design invariant holds and is tested: extra signals can only
+  **shorten** an estimate, so the system errs toward caution rather than false
+  reassurance.
+- Estimates degrade visibly (disconnected, unavailable, withheld) instead of
+  showing a confident wrong number.
+- The demo runs fully offline from simulated scenarios, and the assistant and
+  OCR run on local models, so no data leaves the household network.
+- **Honest limits:** four of nine profiles are still placeholders, and the Q10
+  fit uses poultry data reused for other categories. Gas is experimental and has
+  no influence on estimates by default. There is no authentication, no
+  multi-fridge support, no clinical or safety validation, and no automated
+  mobile UI tests. No accuracy claim is made until the model is calibrated
+  against real spoilage data. See [Known limitations](#known-limitations).
 
 ## Current state
 
@@ -294,3 +355,48 @@ vendored libraries; don't edit them.
 No persistence or auth; placeholder coefficients; no shared-fridge gas semantics;
 no automated mobile interaction tests; web preview lacks OCR upload and item
 deletion.
+
+## Sources and references
+
+Only sources that appear in this repository are listed. Nothing here is a
+validation of the model.
+
+**Food storage data**
+
+- USDA Food Safety and Inspection Service (FSIS), cold food storage guidance. Source of the
+  `d0_days` values for red meat, poultry, seafood, eggs and dairy
+  (`"source": "usda-fsis"` in `engine/foods.json`, table under
+  [Profile provenance](#profile-provenance)).
+- USDA FSIS FoodKeeper data, <https://catalog.data.gov/dataset/fsis-foodkeeper-data>.
+  Loaded by `engine/foodkeeper.py`, which uses the midpoint of the catalog's
+  `dop_refrigerate` range.
+
+**Temperature model**
+
+- Q10 rate model, reference temperature 4 C (`engine/burn.py`).
+- Q10 = 2.7, fitted by log-linear regression of published chicken sensory
+  shelf life at 0, 4, 10 and 15 C (13.33, 9.17, 5.00, 3.00 days; R^2 = 0.9997).
+  **The publication for these four values is not recorded in the repo.** Add the
+  full citation here before relying on or presenting this number.
+- ComBase growth-rate observations (`engine/q10_fit.py`). The fitter expects a
+  manual ComBase export with columns `organism`, `temp_c`, `mu_max`. No ComBase
+  data ships with the repo and none was used for the current profiles.
+
+**Gas and replay data**
+
+- Mendeley Data spoilage datasets with MQ-series gas sensors, used by
+  `simulator/mendeley_replay.py` and `engine/gas_calibrate.py`. Not distributed
+  here, and the specific dataset citation is not recorded in the repo. The
+  calibration output is exploratory and marked `reportable: false`.
+
+**Hardware and software**
+
+- Bosch BME688 gas sensor with the Bosch BSEC2 library (`hardware/sketch.cpp`).
+- ThingSpeak (MathWorks) for sensor upload and polling.
+- Vendored CircuitPython and Adafruit libraries in `hardware/lib/` (BME680,
+  bus device, display text/shapes, motor, NeoPixel, bitmap font); see each
+  library's own license.
+- Ollama with Qwen (`qwen3.5:9b`) for the assistant and label scanning; Tesseract
+  OCR as the legacy scan mode.
+- FastAPI, Pydantic, NumPy, SciPy, Pillow, pillow-heif, httpx, pytesseract; Expo
+  SDK 57 and React Native 0.86 (<https://docs.expo.dev/versions/v57.0.0/>).
