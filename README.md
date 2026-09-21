@@ -4,6 +4,11 @@
 
 # Freshness Tracker
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=7eOdVOMNjco">Demo video</a> ·
+  <a href="https://devpost.com/software/claudius-maximus">Devpost</a>
+</p>
+
 A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
 telemetry simulator, an Expo mobile app, and a BME688 sennsor that uploads to
 ThingSpeak.
