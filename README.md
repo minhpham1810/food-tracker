@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/mobile/assets/images/icon.png" alt="Freshness Tracker logo: a smiling sensor robot above a bag of chicken" width="200">
+</p>
+
 # Freshness Tracker
 
 A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
