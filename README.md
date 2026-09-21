@@ -125,6 +125,19 @@ and dairy as the best available multi-temperature estimate; it is not
 independently validated for those categories. Eggs keep q10 2.0 and the four
 placeholder categories keep their demo values, none of which are fitted.
 
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Freshness engine | Python 3.12+, NumPy, SciPy (Q10 budget, gas baseline fit) |
+| Backend | FastAPI, Uvicorn, Pydantic, httpx, python-dotenv, python-multipart; in-memory store with optional SQLite persistence |
+| Label scanning | Qwen vision model via Ollama (default); Tesseract with pytesseract, Pillow and pillow-heif (legacy mode) |
+| Assistant | Local OpenAI-compatible tool-calling model (Ollama, `qwen3.5:9b`) |
+| Mobile app | Expo SDK 57, React Native 0.86, React 19, TypeScript, Expo Router, Reanimated, AsyncStorage, expo-speech-recognition |
+| Hardware | BME688 gas sensor, ESP32 (Arduino C++), Bosch BSEC2, 3D-printed enclosure (STL) |
+| Cloud and data | ThingSpeak channel for sensor upload, polled by the API |
+| Simulation and testing | Scripted scenarios, Mendeley-style CSV replay, pytest, `tsc --noEmit` |
+
 ## Repository layout
 
 | Path | Responsibility |
