@@ -51,7 +51,7 @@ what actually happened to it, and does so honestly. The requirements were:
 | --- | --- |
 | Freshness engine (`engine/`) | Pure functions. **Track A** integrates temperature into an effective-age budget with a Q10 rate multiplier relative to 4 C, so time spent warm burns more life. **Track B** fits a gas baseline on temperature and humidity and scores anomalies. **Track C** is a manual color-label score. `fusion.fuse` lets B and C only **shorten** Track A's days or veto to 0, and derives a confidence value and a status (`fresh`, `check_early`, `past_budget_quiet`, `discard_quality_signal`). |
 | Evidence-based profiles | `engine/foods.json` holds per-category `d0_days` from USDA FSIS cold-storage guidance for five categories, and a Q10 of 2.7 fitted (R^2 = 0.9997) to published chicken shelf-life at 0, 4, 10 and 15 C. See [Profile provenance](#profile-provenance). |
-| Hardware | A BME688 board (`hardware/sketch.cpp`) reads temperature, humidity and gas and uploads to ThingSpeak every 20 s. The API polls that channel. |
+| Hardware | A BME688 board (`hardware/sketch.cpp`) reads temperature, humidity and gas and uploads to ThingSpeak every 1 minute. The API polls that channel. |
 | Backend (`apps/api/`) | FastAPI service that owns state. All telemetry sources (HTTP, ThingSpeak, simulator, CSV replay) go through one `service.ingest`, and alerts are recomputed from scratch on every change so they cannot drift. Optional SQLite persistence. |
 | Safe failure | Stale data (older than 3 minutes) shows as disconnected. Exposure outside -1 C to 25 C stops integration and withholds the estimate instead of guessing. Aging-rate and storage-temperature advice return "unavailable" rather than a fabricated 1.0x. |
 | Label scanning | Up to 5 photos go to a local Qwen vision model (Tesseract as a legacy option). The user reviews and edits every field and picks the category before the item is created. |
@@ -88,7 +88,7 @@ what actually happened to it, and does so honestly. The requirements were:
 | Mobile app | Working on iOS/Android. Fridge dashboard (grid/list), notifications screen, item details (rename, category, mark opened, label score, delete, aging rate, current-conditions correction, storage-temperature suggestion), manual add, multi-photo label scan, voice-capable assistant, persistent Celsius/Fahrenheit and theme settings, in-app user manual, splash overlay. No auth or durable inventory; the API owns inventory state. |
 | Label scan (OCR) | Qwen vision model via Ollama by default (up to 5 photos, all fields editable before confirm). Tesseract is an explicit legacy single-photo mode. |
 | Assistant | Local OpenAI-compatible tool-calling model (default Ollama `qwen3.5:9b`). It can only act through validated tools and never produces freshness numbers itself. |
-| Hardware | `hardware/sketch.cpp` (Arduino/BSEC2, WiFi) uploads readings to ThingSpeak every 20 s. CAD in `hardware/STL_files/`. The API reads that channel; the board never talks to the API directly. |
+| Hardware | `hardware/sketch.cpp` (Arduino/BSEC2, WiFi) uploads readings to ThingSpeak every 1 minute. CAD in `hardware/STL_files/`. The API reads that channel; the board never talks to the API directly. |
 | Not built | Persistence, authentication, shared-fridge gas semantics, model calibration/validation, automated mobile UI tests. |
 
 ## Profile provenance
@@ -183,7 +183,7 @@ calibration JSON loader are unused when the flag is off; the API reports this.
 metrics need correction. Generated artifacts carry `reportable: false` and are
 rejected as sources of fusion uncertainty.
 
-The telemetry buffer retains 10,000 raw readings (about 55 hours at 20 seconds).
+The telemetry buffer retains 10,000 raw readings (about 55 hours at 1 minute).
 Every accepted reading updates temperature exposure; readings are not downsampled
 for integration. Data older than three minutes is displayed as disconnected.
 Exposure outside -1C through 25C stops integration for that interval and leaves a
@@ -346,7 +346,7 @@ isolated state monkeypatch `main.service` and `main.simulator` (see
 ### Hardware
 
 `hardware/sketch.cpp` reads a BME688 through BSEC2 and posts to ThingSpeak every
-20 s after a ~5 minute calibration. Set the WiFi SSID and write key in the sketch
+1 minute after a ~5 minute calibration. Set the WiFi SSID and write key in the sketch
 constants for your own channel; keep real keys out of git. `hardware/lib/` holds
 vendored libraries; don't edit them.
 
