@@ -1,23 +1,26 @@
 // Freshness Tracker - BME688 gas sensor node on ESP32-S3 Feather.
 //
-// Publishes to ThingSpeak, which is the only consumer. All derived values
-// (baselines, spoilage estimates) are computed backend-side, so this firmware
-// publishes raw sensor output plus the quality flags needed to decide whether
-// a reading is trustworthy.
+// Publishes to ThingSpeak, which is the only consumer. Derived values
+// (baselines, humidity compensation, spoilage estimates) are computed
+// backend-side, so this firmware publishes raw sensor output plus the quality
+// flags needed to decide whether a reading is trustworthy.
 //
-// FIELD mode is the deployed configuration: BSEC ULP (300 s) with deep sleep
-// between samples, 12 samples buffered in RTC memory, one bulk upload per
-// hour. LAB mode is a USB debugging configuration: BSEC LP (3 s), no sleep,
-// upload every 60 s.
+// FIELD mode is the deployed configuration: one sample and one upload per
+// minute, with the radio shut down and the CPU in light sleep in between.
+// ~7 mA average against 75.9 mA for a continuously-running configuration,
+// so roughly 12.5 days on a 2500 mAh cell instead of 28 hours.
 //
-// Measured duty cycle is ~99.3% asleep, giving ~0.50 mA average against
-// 75.9 mA for a continuously-running configuration.
+// Light sleep rather than deep sleep. At a 60 s cadence the radio is ~78% of
+// the energy budget and sleep is ~10%, so deep sleep would save only about 9%
+// overall. It would also cost the BSEC algorithm: deep sleep resets millis(),
+// BSEC rejects a timestamp that moves backwards, and the BSEC2 wrapper's
+// run() takes no external timebase. Light sleep keeps millis() monotonic, so
+// BSEC's calibration, run-in and IAQ accuracy survive every cycle intact.
 
 #include <Arduino.h>
 #include <Wire.h>
 #include <bsec2.h>
 #include <math.h>
-#include <time.h>
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -25,56 +28,55 @@
 #include <Preferences.h>
 
 #include "esp_sleep.h"
-#include "esp_timer.h"
-#include "driver/gpio.h"
 
 
 // ---------------------------------------------------------------- config
+//
+// EDIT THESE THREE LINES BEFORE FLASHING.
+// They are credentials. Replace them with your own, and regenerate the
+// ThingSpeak write key if this file has ever been pushed to a public repo.
 
-#define FW_VERSION "ftrk-5.0.0"
+const char* WIFI_SSID    = "your-ssid";
+const char* WIFI_PASS    = "";             // empty string for an open network
+const char* TS_WRITE_KEY = "your-thingspeak-write-key";
+
+// ----------------------------------------------------------------
+
+#define FW_VERSION "ftrk-7.2.0"
 #define DEVICE_ID  "FTRK-01"
 
-const char* WIFI_SSID = "bucknell_iot";
-const char* WIFI_PASS = "";                 // empty for an open network
+// Wake-to-wake period. ThingSpeak's free tier accepts one update per 15 s, so
+// 60 s has margin. Sleep is shortened by however long the cycle took, keeping
+// the actual cadence at this value rather than period + cycle time.
+const uint32_t PERIOD_MS = 60000;
 
-const char* TS_WRITE_KEY  = "CNIVGYI2N97J0FCS";
-const char* TS_CHANNEL_ID = "3499736";
+const uint32_t SAMPLE_TIMEOUT_MS       = 10000;
+const uint32_t WIFI_CONNECT_TIMEOUT_MS = 10000;
+const uint32_t WIFI_RETRY_TIMEOUT_MS   = 8000;
 
-// BSEC ULP runs at a fixed 300 s. The sleep interval matches it so the
-// wake-up and the next scheduled measurement coincide.
-const uint32_t SAMPLE_PERIOD_S = 300;
+// Boot pauses here before the first sleep so a serial command can reach the
+// board while someone is still watching.
+const uint32_t BOOT_GRACE_MS = 10000;
 
-// 12 x 300 s = one upload per hour. Larger batches save power but widen the
-// window of rows lost to a brownout.
-#define BUFFER_N 12
+// Optional battery voltage monitoring. This board has no fuel gauge, so
+// nothing is measured unless an ADC pin is wired to a divider across the
+// pack. Uncomment and set the pin to enable; the divider ratio is the factor
+// the measured voltage is multiplied by (2.0 for a matched 1:1 divider).
+// The pin must be ADC1-capable (GPIO1-GPIO10 on the ESP32-S3); ADC2 stops
+// working while WiFi is active.
+//
+// #define BATTERY_ADC_PIN  A5
+// #define BATTERY_DIVIDER  2.0f
 
-const unsigned long LAB_UPLOAD_INTERVAL_MS = 60000;
-
-// Cold boot pauses here before the first sleep so a serial command can still
-// reach the board. Skipped on timer wakes.
-const uint32_t BOOT_GRACE_MS = 15000;
-
-const uint32_t SAMPLE_TIMEOUT_MS       = 15000;
-const uint32_t WIFI_CONNECT_TIMEOUT_MS = 12000;
-
-// BSEC occasionally refuses to produce output after a state restore. Three
-// consecutive empty wakes discards the stored state and recalibrates.
-const uint8_t MAX_SAMPLE_FAILURES = 3;
-
-// Power model constants. Bench measurement replaces these; the firmware's
-// measured estimate (fuel-gauge based) does not depend on them.
+// Power model. The duty cycle below is measured by the firmware; these
+// per-state currents are datasheet and reference figures, not measurements of
+// this board. Replace them with bench values to make the estimate specific.
 const float BATT_MAH    = 2500.0f;
-const float BATT_USABLE = 0.85f;            // derate for the voltage knee
-const float I_SLEEP_MA  = 0.15f;            // deep sleep, I2C rail down
-const float I_AWAKE_MA  = 25.0f;            // 80 MHz, radio off
-const float I_WIFI_MA   = 110.0f;           // associate + POST + disconnect
-const float I_LAB_MA    = 75.9f;            // LAB mode, radio associated
-
-// BSEC2 exposes run(int64_t currTimeNs). Deep sleep depends on it: millis()
-// restarts at zero every wake and BSEC rejects a timestamp that moves
-// backwards. Setting this to 0 compiles against older wrappers at the cost of
-// BSEC's calibration tracking in FIELD mode.
-#define BSEC2_HAS_TIMESTAMP_RUN 1
+const float BATT_USABLE = 0.85f;           // derate for the voltage knee
+const float I_SLEEP_MA  = 0.80f;           // light sleep, radio off
+const float I_AWAKE_MA  = 25.0f;           // 80 MHz, radio off
+const float I_WIFI_MA   = 110.0f;          // associate + POST + disconnect
+const float I_LAB_MA    = 75.9f;           // LAB mode, radio associated
 
 
 // ---------------------------------------------------------------- types
@@ -85,15 +87,6 @@ enum RunMode { MODE_LAB = 0, MODE_FIELD = 1 };
 
 const RunMode DEFAULT_RUN_MODE = MODE_FIELD;
 
-// Buffered sample. Packed because RTC slow memory is 8 KB and the BSEC state
-// blob already occupies part of it.
-struct __attribute__((packed)) SampleRec {
-    uint32_t epoch;
-    float    tempC, rh, absHum, gasRaw, bvoc, iaq, battV;
-    uint8_t  flags;
-    uint8_t  pad[3];
-};
-
 struct Sample {
     float tempC, rh, absHum, gasRaw, bvoc, iaq;
     int   iaqAccuracy, stabilization, runIn;
@@ -102,179 +95,127 @@ struct Sample {
 };
 
 
-// ---------------------------------------------------------------- RTC state
-// Retained through deep sleep, cleared by a reset or power cycle.
-
-RTC_DATA_ATTR uint8_t   rtcBsecState[BSEC_MAX_STATE_BLOB_SIZE];
-RTC_DATA_ATTR bool      rtcBsecValid   = false;
-RTC_DATA_ATTR uint64_t  rtcBsecBaseUs  = 0;   // BSEC timebase across sleeps
-RTC_DATA_ATTR uint32_t  rtcEpochBase   = 0;   // epoch when esp_timer was 0
-RTC_DATA_ATTR bool      rtcHaveClock   = false;
-RTC_DATA_ATTR uint32_t  rtcSampleIdx   = 0;
-RTC_DATA_ATTR uint16_t  rtcBufCount    = 0;
-RTC_DATA_ATTR SampleRec rtcBuf[BUFFER_N];
-RTC_DATA_ATTR uint32_t  rtcDropped     = 0;
-RTC_DATA_ATTR uint8_t   rtcFailures    = 0;
-RTC_DATA_ATTR int8_t    rtcI2cLevel    = -1;  // -1 until polarity is probed
-
-// Duty-cycle accumulators behind the modeled power estimate.
-RTC_DATA_ATTR uint64_t rtcAwakeUs = 0;
-RTC_DATA_ATTR uint64_t rtcSleepUs = 0;
-RTC_DATA_ATTR uint64_t rtcWifiUs  = 0;
-
-
 // ---------------------------------------------------------------- globals
 
 Bsec2 envSensor;
 Preferences prefs;
 
 uint8_t bsecScratch[BSEC_MAX_STATE_BLOB_SIZE];
+uint32_t lastBsecSaveMs = 0;
+const uint32_t BSEC_SAVE_INTERVAL_MS = 3600000UL;
 
 uint32_t bootCount = 0;
 RunMode  runMode   = DEFAULT_RUN_MODE;
-bool     verbose   = true;
 
 Sample gS;
-bool   gReady = false;
+bool   gReady     = false;
 bool   haveSample = false;
 
-float latestBattV = NAN, latestBattSoc = NAN;
-float estAvgMa = NAN, measAvgMa = NAN, estDaysLeft = NAN;
+float latestBattV = NAN;
+float avgMa = NAN, lifeDays = NAN;
 
-unsigned long lastUpload = 0, lastWiFiTry = 0;
-uint64_t wifiOnUs = 0;
-int i2cOnLevel = HIGH;
+// Cached association. A full channel scan is the slowest part of connecting,
+// and at this cadence radio time is most of the energy budget.
+uint8_t netBssid[6];
+uint8_t netChannel = 0;
+bool    netCached  = false;
+
+// Duty-cycle accounting. Light sleep keeps RAM and millis() intact, so these
+// are ordinary globals rather than RTC-backed state.
+uint64_t sleepMs = 0, wifiMs = 0;
+uint32_t wifiOnMs = 0;
+uint32_t samples = 0, uploadsOk = 0, uploadsFail = 0;
+uint32_t t0Ms = 0;
+
+int    i2cOnLevel = HIGH;
 String serialLine = "";
-
-
-// ---------------------------------------------------------------- time
-
-int64_t bsecNowNs() {
-    return (int64_t)(rtcBsecBaseUs + (uint64_t)esp_timer_get_time()) * 1000LL;
-}
-
-bool bsecRun() {
-#if BSEC2_HAS_TIMESTAMP_RUN
-    return envSensor.run(bsecNowNs());
-#else
-    return envSensor.run();
-#endif
-}
-
-uint32_t nowEpoch() {
-    if (!rtcHaveClock) return 0;
-    return rtcEpochBase + (uint32_t)(esp_timer_get_time() / 1000000LL);
-}
-
-void isoTime(uint32_t epoch, char* out, size_t n) {
-    time_t t = (time_t)epoch;
-    struct tm tmv;
-    gmtime_r(&t, &tmv);
-    strftime(out, n, "%Y-%m-%dT%H:%M:%SZ", &tmv);
-}
 
 
 // ---------------------------------------------------------------- power
 
-// Average current implied by the accumulated awake / sleep / radio time.
-// Available from the first wake.
-float modeledAvgMa() {
+uint32_t elapsedMs() { return millis() - t0Ms; }
+
+// Average current implied by the measured duty cycle and the per-state
+// currents above. The time terms are real measurements from this board; the
+// current terms are not, so this is an estimate rather than a measurement.
+// Radio time in particular is measured, so a faster association improves the
+// figure without editing any constant.
+float estimateAvgMa() {
     if (runMode == MODE_LAB) return I_LAB_MA;
 
-    uint64_t awake = rtcAwakeUs + (uint64_t)esp_timer_get_time();
-    uint64_t total = awake + rtcSleepUs;
+    uint32_t total = elapsedMs();
     if (total == 0) return NAN;
 
-    double q = (double)awake    * I_AWAKE_MA
-             + (double)rtcSleepUs * I_SLEEP_MA
-             + (double)rtcWifiUs  * (I_WIFI_MA - I_AWAKE_MA);
+    uint64_t awake = (total > sleepMs) ? (total - sleepMs) : 0;
+
+    double q = (double)awake   * I_AWAKE_MA
+             + (double)sleepMs * I_SLEEP_MA
+             + (double)wifiMs  * (I_WIFI_MA - I_AWAKE_MA);
 
     return (float)(q / (double)total);
 }
 
-// Average current from the fuel gauge's state-of-charge drop over elapsed
-// wall-clock time. Independent of the constants above, so it is the figure
-// worth quoting once enough time has passed.
-float measuredAvgMa() {
-    float    soc0 = prefs.getFloat("soc0", NAN);
-    uint32_t t0   = prefs.getUInt("t0", 0);
-    uint32_t tNow = nowEpoch();
-
-    if (isnan(soc0) || isnan(latestBattSoc) || t0 == 0 || tNow <= t0) return NAN;
-
-    float hours = (tNow - t0) / 3600.0f;
-    if (hours < 0.5f) return NAN;
-
-    float usedMah = (soc0 - latestBattSoc) / 100.0f * BATT_MAH;
-    if (usedMah <= 0) return NAN;
-
-    return usedMah / hours;
-}
-
 void updatePower() {
-    estAvgMa  = modeledAvgMa();
-    measAvgMa = measuredAvgMa();
+    avgMa = estimateAvgMa();
 
-    float basis = !isnan(measAvgMa) ? measAvgMa : estAvgMa;
-    if (isnan(basis) || basis <= 0) { estDaysLeft = NAN; return; }
-
-    float remainMah = isnan(latestBattSoc)
-        ? BATT_MAH * BATT_USABLE
-        : BATT_MAH * (latestBattSoc / 100.0f - (1.0f - BATT_USABLE));
-
-    estDaysLeft = (remainMah > 0 ? remainMah : 0) / basis / 24.0f;
+    lifeDays = (!isnan(avgMa) && avgMa > 0)
+        ? BATT_MAH * BATT_USABLE / avgMa / 24.0f
+        : NAN;
 }
 
-void startBatteryTest() {
-    prefs.putFloat("soc0", latestBattSoc);
-    prefs.putUInt("t0", nowEpoch());
-    rtcAwakeUs = rtcSleepUs = rtcWifiUs = 0;
-
-    Serial.print("# battery test anchor: SoC ");
-    Serial.print(latestBattSoc, 1);
-    Serial.println("%");
+void resetPowerBaseline() {
+    t0Ms = millis();
+    sleepMs = wifiMs = 0;
+    uploadsOk = uploadsFail = 0;
+    Serial.println("# duty-cycle accounting reset");
 }
 
 void printPower() {
     updatePower();
 
-    uint64_t awake = rtcAwakeUs + (uint64_t)esp_timer_get_time();
-    uint64_t total = awake + rtcSleepUs;
+    uint32_t total = elapsedMs();
 
     Serial.println("# --- power ---");
-    Serial.print("# mode ");    Serial.println(runMode == MODE_FIELD ? "FIELD" : "LAB");
-    Serial.print("# battery "); Serial.print(latestBattV, 3);
-    Serial.print(" V  ");       Serial.print(latestBattSoc, 1);
-    Serial.println(" %");
+    Serial.print("# mode ");     Serial.print(runMode == MODE_FIELD ? "FIELD" : "LAB");
+    Serial.print("  elapsed ");  Serial.print(total / 3600000.0, 2);
+    Serial.print(" h  samples ");Serial.print(samples);
+    Serial.print("  uploads ");  Serial.print(uploadsOk);
+    Serial.print("/");           Serial.println(uploadsOk + uploadsFail);
 
     if (total > 0) {
-        Serial.print("# awake ");
-        Serial.print((double)awake / (double)total * 100.0, 3);
+        Serial.print("# measured duty cycle: awake ");
+        Serial.print(100.0 * (double)(total - sleepMs) / (double)total, 2);
         Serial.print("%  radio ");
-        Serial.print((double)rtcWifiUs / (double)total * 100.0, 3);
-        Serial.print("%  elapsed ");
-        Serial.print((double)total / 3600e6, 2);
-        Serial.println(" h");
+        Serial.print(100.0 * (double)wifiMs / (double)total, 2);
+        Serial.print("%  sleep ");
+        Serial.print(100.0 * (double)sleepMs / (double)total, 2);
+        Serial.println("%");
     }
 
-    Serial.print("# modeled  "); Serial.print(estAvgMa, 3); Serial.println(" mA");
+    if (uploadsOk + uploadsFail > 0) {
+        Serial.print("# mean radio time ");
+        Serial.print((double)wifiMs / 1000.0 / (double)(uploadsOk + uploadsFail), 2);
+        Serial.println(" s per cycle");
+    }
 
-    Serial.print("# measured ");
-    if (isnan(measAvgMa)) Serial.println("pending");
-    else { Serial.print(measAvgMa, 3); Serial.println(" mA"); }
+    if (!isnan(latestBattV)) {
+        Serial.print("# battery "); Serial.print(latestBattV, 3); Serial.println(" V");
+    }
 
-    float basis = !isnan(measAvgMa) ? measAvgMa : estAvgMa;
+    Serial.print("# estimated average ");
+    if (isnan(avgMa)) Serial.println("pending");
+    else { Serial.print(avgMa, 3); Serial.println(" mA"); }
 
-    Serial.print("# life from full ");
-    if (!isnan(basis) && basis > 0) {
-        Serial.print(BATT_MAH * BATT_USABLE / basis / 24.0f, 1);
-        Serial.println(" days");
-    } else Serial.println("pending");
+    Serial.print("# estimated life from full ");
+    if (isnan(lifeDays)) Serial.println("pending");
+    else {
+        Serial.print(lifeDays, 1);
+        Serial.print(" days on ");
+        Serial.print(BATT_MAH, 0);
+        Serial.println(" mAh");
+    }
 
-    Serial.print("# remaining ");
-    if (isnan(estDaysLeft)) Serial.println("pending");
-    else { Serial.print(estDaysLeft, 1); Serial.println(" days"); }
-
+    Serial.println("# duty cycle is measured; per-state currents are datasheet values");
     Serial.println("# -------------");
 }
 
@@ -314,7 +255,6 @@ uint8_t buildFlags(bool gasValid, bool heaterStable,
 
 void i2cRail(bool on) {
 #ifdef PIN_I2C_POWER
-    gpio_hold_dis((gpio_num_t)PIN_I2C_POWER);
     pinMode(PIN_I2C_POWER, OUTPUT);
     digitalWrite(PIN_I2C_POWER, on ? i2cOnLevel : !i2cOnLevel);
     if (on) delay(20);
@@ -338,42 +278,34 @@ bool bmeResponds() {
 }
 
 // The sense rail's active level differs between Feather revisions, so the
-// correct level is found by checking whether the BME688 acknowledges and
-// cached in RTC memory for subsequent wakes.
+// correct level is found by checking whether the BME688 acknowledges rather
+// than assumed from a constant.
 void bringUpI2cRail() {
-    if (rtcI2cLevel >= 0) i2cOnLevel = rtcI2cLevel;
-
     i2cRail(true);
     Wire.begin();
     delay(30);
 
-    if (bmeResponds()) { rtcI2cLevel = i2cOnLevel; return; }
+    if (bmeResponds()) return;
 
     i2cOnLevel = !i2cOnLevel;
     i2cRail(true);
     Wire.begin();
     delay(30);
 
-    if (bmeResponds()) rtcI2cLevel = i2cOnLevel;
-    else if (verbose)  Serial.println("# BME688 not responding on either rail level");
+    if (!bmeResponds())
+        Serial.println("# BME688 not responding on either rail level");
 }
 
-// MAX17048 fuel gauge, read over raw I2C to avoid pulling in a library.
+// No fuel gauge on this board. Returns NAN unless BATTERY_ADC_PIN is set to a
+// pin wired across a divider on the pack.
 void readBattery() {
-    const uint8_t ADDR = 0x36;
-    latestBattV = latestBattSoc = NAN;
-
-    Wire.beginTransmission(ADDR);
-    Wire.write(0x02);
-    if (Wire.endTransmission(false) != 0) return;
-    if (Wire.requestFrom((int)ADDR, 2) != 2) return;
-    latestBattV = (((uint16_t)Wire.read() << 8) | Wire.read()) * 0.000078125f;
-
-    Wire.beginTransmission(ADDR);
-    Wire.write(0x04);
-    if (Wire.endTransmission(false) != 0) return;
-    if (Wire.requestFrom((int)ADDR, 2) != 2) return;
-    latestBattSoc = (((uint16_t)Wire.read() << 8) | Wire.read()) / 256.0f;
+#ifdef BATTERY_ADC_PIN
+    uint32_t acc = 0;
+    for (int i = 0; i < 16; i++) acc += analogReadMilliVolts(BATTERY_ADC_PIN);
+    latestBattV = (acc / 16.0f) * BATTERY_DIVIDER / 1000.0f;
+#else
+    latestBattV = NAN;
+#endif
 }
 
 
@@ -401,8 +333,8 @@ void newDataCallback(const bme68xData data, const bsecOutputs outputs, Bsec2 bse
         }
     }
 
-    // BSEC does not always emit RAW_GAS; the driver-level reading is the
-    // same measurement and keeps the column populated.
+    // BSEC does not always emit RAW_GAS; the driver-level reading is the same
+    // measurement and keeps the field populated.
     if (isnan(s.gasRaw) || s.gasRaw <= 0) s.gasRaw = data.gas_resistance;
 
     s.gasValid     = (data.status & BME68X_GASM_VALID_MSK) != 0;
@@ -414,19 +346,18 @@ void newDataCallback(const bme68xData data, const bsecOutputs outputs, Bsec2 bse
     gS = s;
     gReady = true;
     haveSample = true;
-    rtcSampleIdx++;
+    samples++;
 }
 
-bool bsecBegin(bool ulp) {
+bool bsecBegin() {
     if (!envSensor.begin(BME68X_I2C_ADDR_HIGH, Wire)) return false;
 
-    if (ulp && rtcBsecValid) {
-        envSensor.setState(rtcBsecState);
-    } else {
-        // NVS copy survives the reset and power cycles that clear RTC memory.
+    // Calibration carried over from the last run, so IAQ accuracy does not
+    // restart from zero after a reflash or a battery swap.
+    if (prefs.getBytesLength("bsec") == BSEC_MAX_STATE_BLOB_SIZE) {
         prefs.getBytes("bsec", bsecScratch, BSEC_MAX_STATE_BLOB_SIZE);
-        if (prefs.getBytesLength("bsec") == BSEC_MAX_STATE_BLOB_SIZE)
-            envSensor.setState(bsecScratch);
+        if (envSensor.setState(bsecScratch))
+            Serial.println("# BSEC state restored");
     }
 
     bsecSensor list[] = {
@@ -439,94 +370,97 @@ bool bsecBegin(bool ulp) {
         BSEC_OUTPUT_BREATH_VOC_EQUIVALENT
     };
 
+    // LP rather than ULP. ULP schedules its next measurement 300 s ahead, so a
+    // 60 s cycle would find nothing ready four times out of five. LP is driven
+    // on demand here, one measurement per cycle. BSEC's filters therefore see
+    // fewer samples than LP assumes and iaq / iaq_accuracy converge slowly;
+    // temperature, humidity and raw gas resistance are direct sensor reads and
+    // are unaffected, as are the two hardware quality bits.
     if (!envSensor.updateSubscription(list, sizeof(list) / sizeof(list[0]),
-                                      ulp ? BSEC_SAMPLE_RATE_ULP
-                                          : BSEC_SAMPLE_RATE_LP))
+                                      BSEC_SAMPLE_RATE_LP))
         return false;
 
     envSensor.attachCallback(newDataCallback);
     return true;
 }
 
-void saveBsecState() {
+// Rate-limited so NVS is not worn at the sample rate.
+void maybeSaveBsecState() {
+    if (millis() - lastBsecSaveMs < BSEC_SAVE_INTERVAL_MS) return;
     if (!envSensor.getState(bsecScratch)) return;
 
-    memcpy(rtcBsecState, bsecScratch, BSEC_MAX_STATE_BLOB_SIZE);
-    rtcBsecValid = true;
-
-    // Flash writes are rate-limited to the upload cadence to avoid wearing
-    // NVS at the sample rate.
-    if (rtcSampleIdx % BUFFER_N == 0)
-        prefs.putBytes("bsec", bsecScratch, BSEC_MAX_STATE_BLOB_SIZE);
+    prefs.putBytes("bsec", bsecScratch, BSEC_MAX_STATE_BLOB_SIZE);
+    lastBsecSaveMs = millis();
 }
 
 
 // ---------------------------------------------------------------- wifi
 
-void wifiBegin() {
+void wifiStart(bool useCache) {
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(true);
-    if (strlen(WIFI_PASS) == 0) WiFi.begin(WIFI_SSID);
-    else                        WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+    const char* pass = strlen(WIFI_PASS) ? WIFI_PASS : NULL;
+
+    if (useCache && netCached) WiFi.begin(WIFI_SSID, pass, netChannel, netBssid);
+    else                       WiFi.begin(WIFI_SSID, pass);
 }
 
-bool wifiConnect(uint32_t timeoutMs) {
-    if (WiFi.status() == WL_CONNECTED) return true;
-
-    wifiOnUs = esp_timer_get_time();
-    wifiBegin();
-
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs) delay(100);
-
+bool wifiWait(uint32_t timeoutMs) {
+    uint32_t t = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t < timeoutMs) delay(50);
     return WiFi.status() == WL_CONNECTED;
 }
 
+bool wifiConnect() {
+    if (WiFi.status() == WL_CONNECTED) return true;
+
+    wifiOnMs = millis();
+    wifiStart(true);
+
+    if (wifiWait(netCached ? WIFI_RETRY_TIMEOUT_MS : WIFI_CONNECT_TIMEOUT_MS)) {
+        if (const uint8_t* b = WiFi.BSSID()) {
+            memcpy(netBssid, b, 6);
+            netChannel = WiFi.channel();
+            netCached = true;
+        }
+        return true;
+    }
+
+    // The cached AP may have changed channel or gone away. One clean retry
+    // with a full scan, and the stale cache is dropped either way.
+    if (netCached) {
+        netCached = false;
+        WiFi.disconnect(true);
+        delay(100);
+        wifiStart(false);
+        return wifiWait(WIFI_CONNECT_TIMEOUT_MS);
+    }
+
+    return false;
+}
+
 void wifiOff() {
-    if (wifiOnUs) {
-        rtcWifiUs += (uint64_t)esp_timer_get_time() - wifiOnUs;
-        wifiOnUs = 0;
+    if (wifiOnMs) {
+        wifiMs += millis() - wifiOnMs;
+        wifiOnMs = 0;
     }
     WiFi.disconnect(true, true);
     WiFi.mode(WIFI_OFF);
-}
-
-// The deep-sleep timer runs from a 150 kHz RC oscillator that drifts by
-// several percent and shifts with temperature, so wall-clock time is
-// re-anchored on every upload rather than free-running between them.
-bool syncNtp(uint32_t timeoutMs) {
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-
-    uint32_t t0 = millis();
-    time_t now = 0;
-
-    while (millis() - t0 < timeoutMs) {
-        now = time(nullptr);
-        if (now > 1700000000) break;
-        delay(100);
-    }
-
-    if (now <= 1700000000) return false;
-
-    int32_t predicted = (int32_t)nowEpoch();
-
-    rtcEpochBase = (uint32_t)now - (uint32_t)(esp_timer_get_time() / 1000000LL);
-    rtcHaveClock = true;
-
-    if (verbose && predicted > 0) {
-        Serial.print("# NTP drift ");
-        Serial.print((int32_t)now - predicted);
-        Serial.println(" s");
-    }
-
-    if (prefs.getUInt("t0", 0) == 0) startBatteryTest();
-    return true;
+    delay(10);
 }
 
 
 // ---------------------------------------------------------------- thingspeak
 // Fields: 1 temp_c, 2 rh_pct, 3 abs_humidity_gm3, 4 gas_raw_ohm,
-//         5 bvoc_eq_ppm, 6 iaq, 7 flags, 8 batt_v
+//         5 bvoc_eq_ppm, 6 iaq, 7 flags, 8 uptime_s
+//
+// Field 8 is seconds since boot. Light sleep leaves millis() monotonic across
+// cycles, so it counts real elapsed time; a drop between consecutive entries
+// means the node reset and the BSEC baseline restarted with it.
+//
+// Entries are stamped by ThingSpeak on arrival. With an upload every cycle,
+// arrival is within seconds of measurement, so the node needs no wall clock.
 
 // NaN is omitted rather than sent as the string "nan", which ThingSpeak
 // rejects. An omitted field reads back empty, which is the correct
@@ -536,13 +470,8 @@ void addField(String &s, int i, float v, int dp) {
     s += "&field"; s += i; s += "="; s += String(v, dp);
 }
 
-void addJson(String &j, int i, float v, int dp) {
-    if (isnan(v) || isinf(v)) return;
-    j += ",\"field"; j += i; j += "\":"; j += String(v, dp);
-}
-
-bool uploadSingle(const Sample &s) {
-    if (WiFi.status() != WL_CONNECTED) return false;
+bool uploadSample() {
+    if (!haveSample) return false;
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -553,15 +482,15 @@ bool uploadSingle(const Sample &s) {
     String url = "https://api.thingspeak.com/update?api_key=";
     url += TS_WRITE_KEY;
 
-    addField(url, 1, s.tempC,  2);
-    addField(url, 2, s.rh,     2);
-    addField(url, 3, s.absHum, 3);
-    addField(url, 4, s.gasRaw, 1);
-    addField(url, 5, s.bvoc,   4);
-    addField(url, 6, s.iaq,    2);
+    addField(url, 1, gS.tempC,  2);
+    addField(url, 2, gS.rh,     2);
+    addField(url, 3, gS.absHum, 3);
+    addField(url, 4, gS.gasRaw, 1);
+    addField(url, 5, gS.bvoc,   4);
+    addField(url, 6, gS.iaq,    2);
 
-    url += "&field7="; url += String((int)s.flags);
-    addField(url, 8, latestBattV, 3);
+    url += "&field7="; url += String((int)gS.flags);
+    url += "&field8="; url += String((unsigned long)(millis() / 1000UL));
 
     if (!https.begin(client, url)) return false;
 
@@ -570,114 +499,13 @@ bool uploadSingle(const Sample &s) {
     r.trim();
     https.end();
 
-    if (verbose) {
-        Serial.print("# update entry "); Serial.print(r);
-        Serial.print(" http=");          Serial.println(code);
-    }
+    bool ok = (code == 200 && r != "0");
+    ok ? uploadsOk++ : uploadsFail++;
 
-    return code == 200 && r != "0";
-}
+    Serial.print("# upload entry "); Serial.print(r);
+    Serial.print(" http=");          Serial.println(code);
 
-// Bulk write: free accounts accept up to 960 rows per request at a minimum
-// of 15 s between requests, so an hourly 12-row post has ample headroom.
-String buildBulkJson() {
-    String j;
-    j.reserve(256 + (size_t)rtcBufCount * 160);
-
-    j += "{\"write_api_key\":\"";
-    j += TS_WRITE_KEY;
-    j += "\",\"updates\":[";
-
-    char iso[32];
-    bool first = true;
-
-    for (uint16_t i = 0; i < rtcBufCount; i++) {
-        const SampleRec &r = rtcBuf[i];
-        if (r.epoch == 0) continue;
-
-        if (!first) j += ",";
-        first = false;
-
-        isoTime(r.epoch, iso, sizeof(iso));
-        j += "{\"created_at\":\""; j += iso; j += "\"";
-
-        addJson(j, 1, r.tempC,  2);
-        addJson(j, 2, r.rh,     2);
-        addJson(j, 3, r.absHum, 3);
-        addJson(j, 4, r.gasRaw, 1);
-        addJson(j, 5, r.bvoc,   4);
-        addJson(j, 6, r.iaq,    2);
-
-        j += ",\"field7\":"; j += String((int)r.flags);
-        addJson(j, 8, r.battV, 3);
-        j += "}";
-    }
-
-    j += "]}";
-    return j;
-}
-
-void uploadBuffered() {
-    if (rtcBufCount == 0) return;
-
-    if (!wifiConnect(WIFI_CONNECT_TIMEOUT_MS)) {
-        if (verbose) Serial.println("# wifi unavailable, rows retained");
-        wifiOff();
-        return;
-    }
-
-    syncNtp(5000);
-
-    // Rows taken before the first successful sync carry epoch 0. Their
-    // timestamps are reconstructed backwards from the known sample period.
-    if (rtcHaveClock) {
-        uint32_t now = nowEpoch();
-        for (int i = (int)rtcBufCount - 1; i >= 0; i--) {
-            if (rtcBuf[i].epoch) continue;
-            rtcBuf[i].epoch = now - (rtcBufCount - 1 - i) * SAMPLE_PERIOD_S;
-        }
-    } else {
-        // Without a clock the bulk endpoint has nothing to order rows by, so
-        // the newest sample goes up as a single server-timestamped update and
-        // the rest stay buffered for the next attempt.
-        if (haveSample) uploadSingle(gS);
-        wifiOff();
-        return;
-    }
-
-    WiFiClientSecure client;
-    client.setInsecure();
-
-    HTTPClient https;
-    https.setTimeout(20000);
-
-    String url = "https://api.thingspeak.com/channels/";
-    url += TS_CHANNEL_ID;
-    url += "/bulk_update.json";
-
-    bool ok = false;
-
-    if (https.begin(client, url)) {
-        https.addHeader("Content-Type", "application/json");
-
-        int code = https.POST(buildBulkJson());
-        String resp = https.getString();
-        resp.trim();
-        https.end();
-
-        if (verbose) {
-            Serial.print("# bulk rows="); Serial.print(rtcBufCount);
-            Serial.print(" http=");       Serial.print(code);
-            Serial.print(" ");            Serial.println(resp);
-        }
-
-        ok = code >= 200 && code < 300;
-    }
-
-    if (ok) rtcBufCount = 0;
-    else if (verbose) Serial.println("# bulk failed, rows retained");
-
-    wifiOff();
+    return ok;
 }
 
 
@@ -687,21 +515,23 @@ void uploadBuffered() {
 
 void printLogHeader() {
     Serial.println("# ---");
-    Serial.print("# ");        Serial.print(DEVICE_ID);
-    Serial.print(" ");         Serial.print(FW_VERSION);
-    Serial.print(" mode=");    Serial.print(runMode == MODE_FIELD ? "FIELD" : "LAB");
-    Serial.print(" boot=");    Serial.println(bootCount);
+    Serial.print("# ");     Serial.print(DEVICE_ID);
+    Serial.print(" ");      Serial.print(FW_VERSION);
+    Serial.print(" mode="); Serial.print(runMode == MODE_FIELD ? "FIELD" : "LAB");
+    Serial.print(" boot="); Serial.println(bootCount);
     Serial.println("# flags: b0 gas_valid b1 heater_stable b2 stabilized "
                    "b3 run_in b4:5 iaq_accuracy");
     Serial.println("# gas is usable only where flags == 63");
-    Serial.println("# epoch_utc 0 means no NTP sync yet");
+    Serial.println("# avg_ma is estimated from the measured duty cycle");
+    Serial.println("# batt_v is blank unless BATTERY_ADC_PIN is configured");
     Serial.println("# ---");
-    Serial.println("epoch_utc,temp_c,rh_pct,abs_humidity_gm3,gas_raw_ohm,"
-                   "bvoc_eq_ppm,iaq,flags,batt_v,batt_soc");
+    Serial.println("sample,uptime_s,temp_c,rh_pct,abs_humidity_gm3,gas_raw_ohm,"
+                   "bvoc_eq_ppm,iaq,flags,avg_ma,batt_v");
 }
 
 void printLogRow() {
-    Serial.print(nowEpoch());       Serial.print(",");
+    Serial.print(samples);          Serial.print(",");
+    Serial.print(millis() / 1000UL);Serial.print(",");
     Serial.print(gS.tempC, 3);      Serial.print(",");
     Serial.print(gS.rh, 3);         Serial.print(",");
     Serial.print(gS.absHum, 4);     Serial.print(",");
@@ -709,47 +539,28 @@ void printLogRow() {
     Serial.print(gS.bvoc, 4);       Serial.print(",");
     Serial.print(gS.iaq, 2);        Serial.print(",");
     Serial.print((int)gS.flags);    Serial.print(",");
-    Serial.print(latestBattV, 3);   Serial.print(",");
-    Serial.println(latestBattSoc, 1);
+    Serial.print(avgMa, 3);         Serial.print(",");
+    Serial.println(latestBattV, 3);
 }
 
 
 // ---------------------------------------------------------------- sleep
 
-void enterDeepSleep(uint64_t sleepUs) {
-    saveBsecState();
+// Light sleep holds RAM, peripheral state and the millis() timebase, which is
+// what lets BSEC keep running across cycles. The CPU and radio are gated off,
+// which is where the saving comes from.
+void lightSleep(uint32_t ms) {
+    if (ms < 50) return;
 
-    uint64_t awakeUs = (uint64_t)esp_timer_get_time();
-
-    rtcAwakeUs    += awakeUs;
-    rtcSleepUs    += sleepUs;
-    rtcBsecBaseUs += awakeUs + sleepUs;
-
-    if (rtcHaveClock)
-        rtcEpochBase += (uint32_t)((awakeUs + sleepUs) / 1000000ULL);
-
-    wifiOff();
-    neoPower(false);
-
-    if (verbose) {
-        Serial.print("# sleeping ");
-        Serial.print((unsigned long)(sleepUs / 1000000ULL));
-        Serial.println(" s");
-    }
+    Serial.print("# sleeping ");
+    Serial.print(ms / 1000.0, 1);
+    Serial.println(" s");
     Serial.flush();
 
-    // Holding the sense rail active through deep sleep leaks roughly 330 uA
-    // through the regulator's enable pulldown, so the rail is dropped and
-    // latched to stop it floating back up while the CPU is off.
-    i2cRail(false);
+    esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);
+    esp_light_sleep_start();
 
-#ifdef PIN_I2C_POWER
-    gpio_hold_en((gpio_num_t)PIN_I2C_POWER);
-#endif
-    gpio_deep_sleep_hold_en();
-
-    esp_sleep_enable_timer_wakeup(sleepUs);
-    esp_deep_sleep_start();
+    sleepMs += ms;
 }
 
 
@@ -764,21 +575,22 @@ void setRunMode(RunMode m) {
 
 void printStatus() {
     Serial.println("# --- status ---");
-    Serial.print("# ");         Serial.print(DEVICE_ID);
-    Serial.print(" ");          Serial.print(FW_VERSION);
-    Serial.print(" mode=");     Serial.print(runMode == MODE_FIELD ? "FIELD" : "LAB");
-    Serial.print(" boot=");     Serial.println(bootCount);
-    Serial.print("# samples="); Serial.print(rtcSampleIdx);
-    Serial.print(" buffered="); Serial.print(rtcBufCount);
-    Serial.print("/");          Serial.print(BUFFER_N);
-    Serial.print(" dropped=");  Serial.println(rtcDropped);
-    Serial.print("# epoch=");   Serial.print(nowEpoch());
-    Serial.print(" clock=");    Serial.println(rtcHaveClock ? "ntp" : "none");
+    Serial.print("# ");           Serial.print(DEVICE_ID);
+    Serial.print(" ");            Serial.print(FW_VERSION);
+    Serial.print(" mode=");       Serial.print(runMode == MODE_FIELD ? "FIELD" : "LAB");
+    Serial.print(" boot=");       Serial.println(bootCount);
+    Serial.print("# period=");    Serial.print(PERIOD_MS / 1000);
+    Serial.print(" s  samples="); Serial.print(samples);
+    Serial.print("  uploads=");   Serial.print(uploadsOk);
+    Serial.print("/");            Serial.println(uploadsOk + uploadsFail);
+    Serial.print("# ap cached="); Serial.print(netCached ? "yes ch" : "no");
+    if (netCached) Serial.print(netChannel);
+    Serial.println();
     Serial.print("# last flags=");
     Serial.print(haveSample ? (int)gS.flags : -1);
     Serial.println(haveSample && gS.flags == 63 ? " (gas usable)" : " (gas not usable)");
-    Serial.println("# commands: S status, P power, B reset battery anchor,");
-    Serial.println("#           M LAB, M FIELD, U upload now, Z sleep now");
+    Serial.println("# commands: S status, P power, B reset duty-cycle accounting,");
+    Serial.println("#           M LAB, M FIELD");
     Serial.println("# ---------------");
 }
 
@@ -794,9 +606,7 @@ void processCommand(String line) {
     switch (cmd) {
     case 'S': printStatus(); break;
     case 'P': readBattery(); printPower(); break;
-    case 'B': readBattery(); startBatteryTest(); break;
-    case 'U': uploadBuffered(); break;
-    case 'Z': enterDeepSleep((uint64_t)SAMPLE_PERIOD_S * 1000000ULL); break;
+    case 'B': resetPowerBaseline(); break;
 
     case 'M':
         if      (arg == "LAB")   setRunMode(MODE_LAB);
@@ -825,73 +635,48 @@ void handleSerial() {
 }
 
 
-// ---------------------------------------------------------------- field cycle
+// ---------------------------------------------------------------- cycle
 
-void bufferSample() {
-    if (rtcBufCount >= BUFFER_N) {
-        // Discarding the oldest row keeps the most recent hour intact when an
-        // upload has been failing.
-        for (uint16_t i = 1; i < BUFFER_N; i++) rtcBuf[i - 1] = rtcBuf[i];
-        rtcBufCount = BUFFER_N - 1;
-        rtcDropped++;
-    }
-
-    SampleRec &r = rtcBuf[rtcBufCount++];
-    r.epoch  = nowEpoch();
-    r.tempC  = gS.tempC;
-    r.rh     = gS.rh;
-    r.absHum = gS.absHum;
-    r.gasRaw = gS.gasRaw;
-    r.bvoc   = gS.bvoc;
-    r.iaq    = gS.iaq;
-    r.battV  = latestBattV;
-    r.flags  = gS.flags;
-}
-
-void fieldCycle(bool coldBoot) {
-    bringUpI2cRail();
-    readBattery();
-    updatePower();
-
-    if (!bsecBegin(true)) {
-        if (verbose) Serial.println("# BSEC init failed, retrying next cycle");
-        rtcFailures++;
-        if (rtcFailures >= MAX_SAMPLE_FAILURES) rtcBsecValid = false;
-        enterDeepSleep((uint64_t)SAMPLE_PERIOD_S * 1000000ULL);
-        return;
-    }
-
+// Drives BSEC until it emits, or gives up. BSEC decides internally when the
+// sensor is ready, so this polls rather than assuming a fixed delay.
+bool waitForSample(uint32_t timeoutMs) {
     gReady = false;
-    uint32_t t0 = millis();
+    uint32_t t = millis();
 
-    while (!gReady && millis() - t0 < SAMPLE_TIMEOUT_MS) {
-        bsecRun();
+    while (!gReady && millis() - t < timeoutMs) {
+        envSensor.run();
+        handleSerial();
         delay(10);
     }
 
-    if (gReady) {
-        rtcFailures = 0;
-        printLogRow();
-        bufferSample();
-    } else {
-        rtcFailures++;
+    return gReady;
+}
 
-        // A restored state that BSEC will not accept leaves the node silent
-        // forever, so it is discarded after repeated empty wakes.
-        if (rtcFailures >= MAX_SAMPLE_FAILURES) {
-            rtcBsecValid = false;
-            rtcFailures = 0;
-            if (verbose) Serial.println("# discarding BSEC state after repeated timeouts");
+void fieldCycle() {
+    uint32_t cycleStart = millis();
+
+    readBattery();
+    updatePower();
+
+    if (waitForSample(SAMPLE_TIMEOUT_MS)) {
+        printLogRow();
+
+        if (wifiConnect()) uploadSample();
+        else {
+            uploadsFail++;
+            Serial.println("# wifi unavailable, sample dropped");
         }
+
+        wifiOff();
+    } else {
+        Serial.println("# no BSEC sample this cycle");
     }
 
-    saveBsecState();
+    maybeSaveBsecState();
+    updatePower();
 
-    // A cold boot uploads immediately so the full path is exercised while
-    // someone is still watching the console.
-    if (rtcBufCount >= BUFFER_N || coldBoot) uploadBuffered();
-
-    enterDeepSleep((uint64_t)SAMPLE_PERIOD_S * 1000000ULL);
+    uint32_t used = millis() - cycleStart;
+    lightSleep(used < PERIOD_MS ? PERIOD_MS - used : 0);
 }
 
 
@@ -910,104 +695,78 @@ void setup() {
     Serial.setTxTimeoutMs(0);
 #endif
 
-    bool fromSleep = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
-    verbose = !fromSleep;
+    delay(1500);
 
-    if (!fromSleep) delay(1500);
+#ifdef BATTERY_ADC_PIN
+    analogReadResolution(12);
+#endif
 
     prefs.begin("ftrk", false);
     bootCount = prefs.getUInt("boots", 0) + 1;
     prefs.putUInt("boots", bootCount);
     runMode = (RunMode)prefs.getUChar("mode", (uint8_t)DEFAULT_RUN_MODE);
 
-    // Holding BOOT through a reset forces LAB, which is the way back from a
-    // sleeping board when the serial console is not already open.
+    // Holding BOOT through a reset forces LAB, which is the way back if FIELD
+    // mode ever makes the console hard to reach.
     pinMode(0, INPUT_PULLUP);
     delay(5);
-    if (digitalRead(0) == LOW && !fromSleep) runMode = MODE_LAB;
-
-    if (!fromSleep) {
-        // RTC memory is cleared by a reset, so the timebase and buffer
-        // restart rather than continuing from stale values.
-        rtcBsecValid = false;
-        rtcBsecBaseUs = 0;
-        rtcBufCount = 0;
-        rtcHaveClock = false;
-        rtcEpochBase = 0;
-        rtcFailures = 0;
-    }
+    if (digitalRead(0) == LOW) runMode = MODE_LAB;
 
     neoPower(false);
-
-    if (runMode == MODE_FIELD) {
-        if (!fromSleep) {
-            bringUpI2cRail();
-            readBattery();
-            updatePower();
-
-            printLogHeader();
-            printStatus();
-            printPower();
-
-            Serial.print("# grace window ");
-            Serial.print(BOOT_GRACE_MS / 1000);
-            Serial.println(" s before first sleep");
-
-            uint32_t t0 = millis();
-            while (millis() - t0 < BOOT_GRACE_MS) {
-                handleSerial();
-                if (runMode == MODE_LAB) break;
-                delay(20);
-            }
-        }
-
-        if (runMode == MODE_FIELD) { fieldCycle(!fromSleep); return; }
-    }
-
-    // LAB: continuous sampling on USB power.
     bringUpI2cRail();
     readBattery();
 
-    if (!bsecBegin(false)) Serial.println("# BSEC init failed");
+    if (!bsecBegin()) Serial.println("# BSEC init failed");
 
     printLogHeader();
     printStatus();
 
-    wifiBegin();
-    lastWiFiTry = millis();
-    lastUpload  = millis();
+    t0Ms = millis();
+    lastBsecSaveMs = millis();
+
+    if (runMode == MODE_FIELD) {
+        Serial.print("# grace window ");
+        Serial.print(BOOT_GRACE_MS / 1000);
+        Serial.println(" s before the first sleep");
+
+        uint32_t t = millis();
+        while (millis() - t < BOOT_GRACE_MS) {
+            envSensor.run();          // let BSEC settle while we wait
+            handleSerial();
+            delay(20);
+        }
+    } else {
+        wifiStart(false);
+    }
 }
 
 
 // ---------------------------------------------------------------- loop
-// LAB only; FIELD ends each wake inside deep sleep and never reaches here.
 
 void loop() {
-    bsecRun();
+    handleSerial();
+
+    if (runMode == MODE_FIELD) { fieldCycle(); return; }
+
+    // LAB: continuous sampling on USB power, radio stays associated.
+    envSensor.run();
 
     if (gReady) {
         gReady = false;
         printLogRow();
     }
 
-    handleSerial();
+    static uint32_t lastUpload = 0;
 
-    if (runMode == MODE_FIELD)
-        enterDeepSleep((uint64_t)SAMPLE_PERIOD_S * 1000000ULL);
-
-    if (WiFi.status() != WL_CONNECTED && millis() - lastWiFiTry >= 30000) {
-        lastWiFiTry = millis();
-        WiFi.disconnect();
-        wifiBegin();
-    }
-
-    if (haveSample && millis() - lastUpload >= LAB_UPLOAD_INTERVAL_MS) {
+    if (haveSample && millis() - lastUpload >= PERIOD_MS) {
         lastUpload = millis();
 
-        if (!rtcHaveClock && WiFi.status() == WL_CONNECTED) syncNtp(3000);
+        if (WiFi.status() != WL_CONNECTED) wifiStart(false);
 
         readBattery();
         updatePower();
-        uploadSingle(gS);
+
+        if (WiFi.status() == WL_CONNECTED) uploadSample();
+        maybeSaveBsecState();
     }
 }
