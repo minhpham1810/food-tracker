@@ -119,8 +119,8 @@ def test_ocr_requires_category_confirmation_and_timeout_offers_manual(monkeypatc
     from apps.api.vision_ocr import _timeout_seconds
     client = TestClient(main.app)
     assert client.post('/api/ocr/confirm', json={'profile_id': 'dairy'}).status_code == 400
-    monkeypatch.setenv('OCR_TIMEOUT_SECONDS', '120')
-    assert _timeout_seconds() == 15
+    monkeypatch.setenv('OCR_TIMEOUT_SECONDS', '600')
+    assert _timeout_seconds() == 60
     def timeout(_):
         raise httpx.ReadTimeout('expired')
     monkeypatch.setattr(main.ocr_module, 'scan_images', timeout)

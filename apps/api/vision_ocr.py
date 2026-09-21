@@ -15,7 +15,7 @@ from PIL import Image
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_MODEL = "qwen3.5:9b"
-DEFAULT_TIMEOUT_SECONDS = 15.0
+DEFAULT_TIMEOUT_SECONDS = 60.0
 MAX_IMAGE_EDGE = 2048
 
 _NULLABLE_STRING = {"anyOf": [{"type": "string"}, {"type": "null"}]}

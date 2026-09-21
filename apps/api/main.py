@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from engine.models import TelemetrySample
 
 from . import ocr as ocr_module
+from .vision_ocr import _timeout_seconds as _ocr_timeout_seconds
 from .llm.gateway import LLMGateway
 from .llm.tools import ToolDispatcher
 from .schemas import (
@@ -186,13 +187,13 @@ async def ocr_scan(
     try:
         # Vision inference can take tens of seconds during a cold model load. Keep
         # the event loop free so health, inventory, and telemetry requests continue.
-        result = await asyncio.wait_for(run_in_threadpool(ocr_module.scan_images, contents), timeout=15.0)
+        result = await asyncio.wait_for(run_in_threadpool(ocr_module.scan_images, contents), timeout=_ocr_timeout_seconds())
         # The first photo is the one the user framed at the product, so it is the
         # one worth keeping as the item's thumbnail.
         thumbnail = await run_in_threadpool(ocr_module.thumbnail, contents[0])
         return {**result, "scan_id": service.stash_scan_photo(thumbnail)}
     except (TimeoutError, httpx.TimeoutException) as exc:
-        raise HTTPException(status_code=503, detail="OCR timed out after 15 seconds. Enter the item manually.") from exc
+        raise HTTPException(status_code=503, detail="OCR timed out. Enter the item manually.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, ocr_module.VisionOCRError) as exc:
