@@ -183,7 +183,7 @@ calibration JSON loader are unused when the flag is off; the API reports this.
 metrics need correction. Generated artifacts carry `reportable: false` and are
 rejected as sources of fusion uncertainty.
 
-The telemetry buffer retains 10,000 raw readings (about 55 hours at 1 minute).
+The telemetry buffer retains about 3,000 raw readings (about 50 hours at 1 minute).
 Every accepted reading updates temperature exposure; readings are not downsampled
 for integration. Data older than three minutes is displayed as disconnected.
 Exposure outside -1C through 25C stops integration for that interval and leaves a
