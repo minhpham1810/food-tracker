@@ -13,6 +13,8 @@ A food-freshness prototype: a Python freshness engine, a FastAPI backend, a
 telemetry simulator, an Expo mobile app, and a BME688 sennsor that uploads to
 ThingSpeak.
 
+Built by a four-person team. **SASEhack 2026:** Best First Hack award; Pitch Competition finalist recognition (SASEhack Hat).
+
 This is an experimental waste-reduction prototype. Five profiles use USDA FSIS
 storage guidance; four remain placeholders. Days left use recorded temperature exposure and
 project future storage at 4C. Display rounds down to whole days or less than one
